@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/OWFramework.iml" filepath="$PROJECT_DIR$/OWFramework.iml" />
+      <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
+      <module fileurl="file://$PROJECT_DIR$/base/base.iml" filepath="$PROJECT_DIR$/base/base.iml" />
+      <module fileurl="file://$PROJECT_DIR$/common.ui/common.ui.iml" filepath="$PROJECT_DIR$/common.ui/common.ui.iml" />
+      <module fileurl="file://$PROJECT_DIR$/push.Baidu/push.Baidu.iml" filepath="$PROJECT_DIR$/push.Baidu/push.Baidu.iml" />
+      <module fileurl="file://$PROJECT_DIR$/push.GeTui/push.GeTui.iml" filepath="$PROJECT_DIR$/push.GeTui/push.GeTui.iml" />
+      <module fileurl="file://$PROJECT_DIR$/push.IMSDK/push.IMSDK.iml" filepath="$PROJECT_DIR$/push.IMSDK/push.IMSDK.iml" />
+    </modules>
+  </component>
+</project>
