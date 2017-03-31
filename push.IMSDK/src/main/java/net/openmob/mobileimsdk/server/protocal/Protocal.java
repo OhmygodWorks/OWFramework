@@ -11,7 +11,8 @@
  */
 package net.openmob.mobileimsdk.server.protocal;
 
-import com.google.gson.Gson;
+import com.alibaba.fastjson.JSON;
+
 import java.util.UUID;
 
 public class Protocal
@@ -107,7 +108,7 @@ public class Protocal
 
 	public String toGsonString()
 	{
-		return new Gson().toJson(this);
+		return JSON.toJSONString(this);
 	}
 
 	public byte[] toBytes()

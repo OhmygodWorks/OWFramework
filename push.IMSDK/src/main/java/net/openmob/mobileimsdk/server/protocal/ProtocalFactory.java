@@ -11,7 +11,8 @@
  */
 package net.openmob.mobileimsdk.server.protocal;
 
-import com.google.gson.Gson;
+import com.alibaba.fastjson.JSON;
+
 import net.openmob.mobileimsdk.server.protocal.c.PKeepAlive;
 import net.openmob.mobileimsdk.server.protocal.c.PLoginInfo;
 import net.openmob.mobileimsdk.server.protocal.s.PErrorResponse;
@@ -22,7 +23,7 @@ public class ProtocalFactory
 {
 	private static String create(Object c)
 	{
-		return new Gson().toJson(c);
+		return JSON.toJSONString(c);
 	}
 
 	public static <T> T parse(byte[] fullProtocalJASOnBytes, int len, Class<T> clazz)
@@ -32,7 +33,7 @@ public class ProtocalFactory
 
 	public static <T> T parse(String dataContentOfProtocal, Class<T> clazz)
 	{
-		return new Gson().fromJson(dataContentOfProtocal, clazz);
+		return JSON.parseObject(dataContentOfProtocal, clazz);
 	}
 
 	public static Protocal parse(byte[] fullProtocalJASOnBytes, int len)
