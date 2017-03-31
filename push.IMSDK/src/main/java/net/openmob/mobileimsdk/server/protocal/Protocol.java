@@ -15,7 +15,7 @@ import com.alibaba.fastjson.JSON;
 
 import java.util.UUID;
 
-public class Protocal
+public class Protocol
 {
 	private int type = 0;
 	private String dataContent = null;
@@ -25,12 +25,12 @@ public class Protocal
 	private boolean QoS = false;
 	private transient int retryCount = 0;
 
-	public Protocal(int type, String dataContent, int from, int to)
+	public Protocol(int type, String dataContent, int from, int to)
 	{
 		this(type, dataContent, from, to, false, null);
 	}
 
-	public Protocal(int type, String dataContent, int from, int to, boolean QoS, String fingerPrint)
+	public Protocol(int type, String dataContent, int from, int to, boolean QoS, String fingerPrint)
 	{
 		this.type = type;
 		this.dataContent = dataContent;
@@ -118,8 +118,8 @@ public class Protocal
 
 	public Object clone()
 	{
-		// 克隆一个Protocal对象（该对象已重置retryCount数值为0）
-		Protocal cloneP = new Protocal(getType(), 
+		// 克隆一个Protocol对象（该对象已重置retryCount数值为0）
+		Protocol cloneP = new Protocol(getType(),
 				getDataContent(), getFrom(), getTo(), isQoS(), getFp());
 		return cloneP;
 	}

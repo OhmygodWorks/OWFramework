@@ -15,10 +15,12 @@ import android.content.Context;
 import android.os.AsyncTask;
 import android.os.Handler;
 import android.util.Log;
-import java.util.Observer;
+
 import net.openmob.mobileimsdk.android.ClientCoreSDK;
 
-public class KeepAliveDaemon
+import java.util.Observer;
+
+public final class KeepAliveDaemon
 {
 	private static final String TAG = KeepAliveDaemon.class.getSimpleName();
 
@@ -29,10 +31,10 @@ public class KeepAliveDaemon
 	private Handler handler = null;
 	private Runnable runnable = null;
 	private boolean keepAliveRunning = false;
-	private long lastGetKeepAliveResponseFromServerTimstamp = 0L;
+	private long lastGetKeepAliveResponseFromServerTimestamp = 0L;
 
 	private Observer networkConnectionLostObserver = null;
-	private boolean _excuting = false;
+	private boolean _executing = false;
 	private Context context = null;
 
 	private static KeepAliveDaemon instance = null;
@@ -59,7 +61,7 @@ public class KeepAliveDaemon
 			{
 				// 极端情况下本次循环内可能执行时间超过了时间间隔，此处是防止在前一
 				// 次还没有运行完的情况下又重复过劲行，从而出现无法预知的错误
-				if (!KeepAliveDaemon.this._excuting)
+				if (!KeepAliveDaemon.this._executing)
 				{
 					new AsyncTask<Object, Integer, Integer>()
 					{
@@ -67,21 +69,21 @@ public class KeepAliveDaemon
 
 						protected Integer doInBackground(Object[] params)
 						{
-							KeepAliveDaemon.this._excuting = true;
+							KeepAliveDaemon.this._executing = true;
 							if (ClientCoreSDK.DEBUG)
 								Log.d(KeepAliveDaemon.TAG, "【IMCORE】心跳线程执行中...");
 							int code = LocalUDPDataSender.getInstance(KeepAliveDaemon.this.context).sendKeepAlive();
 
-							return Integer.valueOf(code);
+							return code;
 						}
 
 						protected void onPostExecute(Integer code)
 						{
 							boolean isInitialedForKeepAlive = 
-									KeepAliveDaemon.this.lastGetKeepAliveResponseFromServerTimstamp == 0L;
-							if ((code.intValue() == 0) 
-									&& (KeepAliveDaemon.this.lastGetKeepAliveResponseFromServerTimstamp == 0L)) {
-								KeepAliveDaemon.this.lastGetKeepAliveResponseFromServerTimstamp = System.currentTimeMillis();
+									KeepAliveDaemon.this.lastGetKeepAliveResponseFromServerTimestamp == 0L;
+							if ((code == 0) &&
+								(KeepAliveDaemon.this.lastGetKeepAliveResponseFromServerTimestamp == 0L)) {
+								KeepAliveDaemon.this.lastGetKeepAliveResponseFromServerTimestamp = System.currentTimeMillis();
 							}
 
 							if (!isInitialedForKeepAlive)
@@ -89,7 +91,7 @@ public class KeepAliveDaemon
 								long now = System.currentTimeMillis();
 
 								// 当当前时间与最近一次服务端的心跳响应包时间间隔>= 10秒就判定当前与服务端的网络连接已断开
-								if (now - KeepAliveDaemon.this.lastGetKeepAliveResponseFromServerTimstamp 
+								if (now - KeepAliveDaemon.this.lastGetKeepAliveResponseFromServerTimestamp
 										>= KeepAliveDaemon.NETWORK_CONNECTION_TIME_OUT)
 								{
 									KeepAliveDaemon.this.stop();
@@ -101,7 +103,7 @@ public class KeepAliveDaemon
 								}
 							}
 
-							KeepAliveDaemon.this._excuting = false;
+							KeepAliveDaemon.this._executing = false;
 							if (!this.willStop)
 							{
 								// 开始下一个心跳循环
@@ -111,7 +113,7 @@ public class KeepAliveDaemon
 							}
 						}
 					}
-					.execute(new Object[0]);
+					.execute();
 				}
 			}
 		};
@@ -121,7 +123,7 @@ public class KeepAliveDaemon
 	{
 		this.handler.removeCallbacks(this.runnable);
 		this.keepAliveRunning = false;
-		this.lastGetKeepAliveResponseFromServerTimstamp = 0L;
+		this.lastGetKeepAliveResponseFromServerTimestamp = 0L;
 	}
 
 	public void start(boolean immediately)
@@ -137,9 +139,9 @@ public class KeepAliveDaemon
 		return this.keepAliveRunning;
 	}
 
-	public void updateGetKeepAliveResponseFromServerTimstamp()
+	public void updateGetKeepAliveResponseFromServerTimestamp()
 	{
-		this.lastGetKeepAliveResponseFromServerTimstamp = System.currentTimeMillis();
+		this.lastGetKeepAliveResponseFromServerTimestamp = System.currentTimeMillis();
 	}
 
 	public void setNetworkConnectionLostObserver(Observer networkConnectionLostObserver)

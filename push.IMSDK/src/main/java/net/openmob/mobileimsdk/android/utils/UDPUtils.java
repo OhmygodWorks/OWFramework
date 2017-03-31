@@ -15,9 +15,13 @@ import android.util.Log;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 
-public class UDPUtils
+public final class UDPUtils
 {
 	private static final String TAG = UDPUtils.class.getSimpleName();
+
+	private UDPUtils() {
+		//FOR UTIL CLASS
+	}
 
 	public static boolean send(DatagramSocket skt, byte[] d, int dataLen)
 	{
@@ -45,7 +49,7 @@ public class UDPUtils
 
 	public static synchronized boolean send(DatagramSocket skt, DatagramPacket p)
 	{
-		boolean sendSucess = true;
+		boolean sendSucceed = true;
 		if ((skt != null) && (p != null))
 		{
 			if (skt.isConnected())
@@ -56,7 +60,7 @@ public class UDPUtils
 				}
 				catch (Exception e)
 				{
-					sendSucess = false;
+					sendSucceed = false;
 					Log.e(TAG, "【IMCORE】send方法中》》发送UDP数据报文时出错了，原因是：" + e.getMessage(), e);
 				}
 			}
@@ -66,6 +70,6 @@ public class UDPUtils
 			Log.w(TAG, "【IMCORE】在send()UDP数据报时没有成功执行，原因是：skt==null || p == null!");
 		}
 
-		return sendSucess;
+		return sendSucceed;
 	}
 }

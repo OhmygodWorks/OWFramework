@@ -15,29 +15,29 @@ import java.util.ArrayList;
 import java.util.concurrent.ConcurrentHashMap;
 
 import net.openmob.mobileimsdk.android.ClientCoreSDK;
-import net.openmob.mobileimsdk.server.protocal.Protocal;
+import net.openmob.mobileimsdk.server.protocal.Protocol;
 import android.content.Context;
 import android.os.AsyncTask;
 import android.os.Handler;
 import android.util.Log;
 
-public class QoS4SendDaemon
+public final class QoS4SendDaemon
 {
 	private static final String TAG = QoS4SendDaemon.class.getSimpleName();
 
 	// 并发Hash，因为本类中可能存在不同的线程同时remove或遍历之
-	private ConcurrentHashMap<String, Protocal> sentMessages = new ConcurrentHashMap<String, Protocal>();
+	private ConcurrentHashMap<String, Protocol> sentMessages = new ConcurrentHashMap<>();
 	// 关发Hash，因为本类中可能存在不同的线程同时remove或遍历之
-	private ConcurrentHashMap<String, Long> sendMessagesTimestamp = new ConcurrentHashMap<String, Long>();
+	private ConcurrentHashMap<String, Long> sendMessagesTimestamp = new ConcurrentHashMap<>();
 
-	public static final int CHECH_INTERVAL = 5000;
+	public static final int CHECK_INTERVAL = 5000;
 	public static final int MESSAGES_JUST$NOW_TIME = 3000;
 	public static final int QOS_TRY_COUNT = 3;
 
 	private Handler handler = null;
 	private Runnable runnable = null;
 	private boolean running = false;
-	private boolean _excuting = false;
+	private boolean _executing = false;
 	private Context context = null;
 
 	private static QoS4SendDaemon instance = null;
@@ -66,15 +66,15 @@ public class QoS4SendDaemon
 			{
 				// 极端情况下本次循环内可能执行时间超过了时间间隔，此处是防止在前一
 				// 次还没有运行完的情况下又重复执行，从而出现无法预知的错误
-				if (!QoS4SendDaemon.this._excuting)
+				if (!QoS4SendDaemon.this._executing)
 				{
 					new AsyncTask()
 					{
-						private ArrayList<Protocal> lostMessages = new ArrayList();
+						private ArrayList<Protocol> lostMessages = new ArrayList();
 
-						protected ArrayList<Protocal> doInBackground(Object[] params)
+						protected ArrayList<Protocol> doInBackground(Object[] params)
 						{
-							QoS4SendDaemon.this._excuting = true;
+							QoS4SendDaemon.this._executing = true;
 							try
 							{
 								if (ClientCoreSDK.DEBUG) {
@@ -86,7 +86,7 @@ public class QoS4SendDaemon
 
 								for (String key : QoS4SendDaemon.this.sentMessages.keySet())
 								{
-									Protocal p = (Protocal)QoS4SendDaemon.this.sentMessages.get(key);
+									Protocol p = (Protocol)QoS4SendDaemon.this.sentMessages.get(key);
 									if ((p != null) && (p.isQoS()))
 									{
 										if (p.getRetryCount() >= QOS_TRY_COUNT)
@@ -97,12 +97,12 @@ public class QoS4SendDaemon
 														"的消息包重传次数已达" + p.getRetryCount() + "(最多" + QOS_TRY_COUNT + "次)上限，将判定为丢包！");
 											}
 
-											this.lostMessages.add((Protocal)p.clone());
+											this.lostMessages.add((Protocol)p.clone());
 											QoS4SendDaemon.this.remove(p.getFp());
 										}
 										else
 										{
-											long delta = System.currentTimeMillis() - ((Long)QoS4SendDaemon.this.sendMessagesTimestamp.get(key)).longValue();
+											long delta = System.currentTimeMillis() - QoS4SendDaemon.this.sendMessagesTimestamp.get(key);
 
 											if (delta <= MESSAGES_JUST$NOW_TIME)
 											{
@@ -154,24 +154,24 @@ public class QoS4SendDaemon
 							return this.lostMessages;
 						}
 
-						protected void onPostExecute(ArrayList<Protocal> al)
+						protected void onPostExecute(ArrayList<Protocol> al)
 						{
 							if ((al != null) && (al.size() > 0))
 							{
 								QoS4SendDaemon.this.notifyMessageLost(al);
 							}
 
-							QoS4SendDaemon.this._excuting = false;
+							QoS4SendDaemon.this._executing = false;
 							QoS4SendDaemon.this.handler.postDelayed(QoS4SendDaemon.this.runnable, 5000L);
 						}
 					}
-					.execute(new Object[0]);
+					.execute();
 				}
 			}
 		};
 	}
 
-	protected void notifyMessageLost(ArrayList<Protocal> lostMessages)
+	protected void notifyMessageLost(ArrayList<Protocol> lostMessages)
 	{
 		if (ClientCoreSDK.getInstance().getMessageQoSEvent() != null)
 			ClientCoreSDK.getInstance().getMessageQoSEvent().messagesLost(lostMessages);
@@ -181,7 +181,7 @@ public class QoS4SendDaemon
 	{
 		stop();
 
-		this.handler.postDelayed(this.runnable, immediately ? 0 : CHECH_INTERVAL);
+		this.handler.postDelayed(this.runnable, immediately ? 0 : CHECK_INTERVAL);
 		this.running = true;
 	}
 
@@ -201,7 +201,7 @@ public class QoS4SendDaemon
 		return this.sentMessages.get(fingerPrint) != null;
 	}
 
-	public void put(Protocal p)
+	public void put(Protocol p)
 	{
 		if (p == null)
 		{
@@ -243,7 +243,7 @@ public class QoS4SendDaemon
 			protected void onPostExecute(Object result) 
 			{
 				Log.w(TAG, "【IMCORE】【QoS】指纹为"+fingerPrint+"的消息已成功从发送质量保证队列中移除(可能是收到接收方的应答也可能是达到了重传的次数上限)，重试次数="
-						+(result != null?((Protocal)result).getRetryCount():"none呵呵."));
+						+(result != null?((Protocol)result).getRetryCount():"none呵呵."));
 			}
 		}.execute();
 	}

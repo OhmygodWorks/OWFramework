@@ -11,9 +11,9 @@
  */
 package net.openmob.mobileimsdk.android.event;
 
-public abstract interface ChatBaseEvent
+public interface ChatBaseEvent
 {
-  public abstract void onLoginMessage(int paramInt1, int paramInt2);
+  void onLoginMessage(int paramInt1, int paramInt2);
 
-  public abstract void onLinkCloseMessage(int paramInt);
+  void onLinkCloseMessage(int paramInt);
 }

@@ -11,46 +11,47 @@
  */
 package net.openmob.mobileimsdk.android.core;
 
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.util.Observable;
-import java.util.Observer;
-
-import net.openmob.mobileimsdk.android.ClientCoreSDK;
-import net.openmob.mobileimsdk.android.conf.ConfigEntity;
-import net.openmob.mobileimsdk.server.protocal.Protocal;
-import net.openmob.mobileimsdk.server.protocal.ProtocalFactory;
-import net.openmob.mobileimsdk.server.protocal.ProtocalType;
-import net.openmob.mobileimsdk.server.protocal.s.PErrorResponse;
-import net.openmob.mobileimsdk.server.protocal.s.PLoginInfoResponse;
 import android.content.Context;
 import android.os.Handler;
 import android.os.Message;
 import android.util.Log;
 
-public class LocalUDPDataReciever
+import net.openmob.mobileimsdk.android.ClientCoreSDK;
+import net.openmob.mobileimsdk.android.conf.ConfigEntity;
+import net.openmob.mobileimsdk.server.protocal.Protocol;
+import net.openmob.mobileimsdk.server.protocal.ProtocolFactory;
+import net.openmob.mobileimsdk.server.protocal.ProtocolType;
+import net.openmob.mobileimsdk.server.protocal.s.PErrorResponse;
+import net.openmob.mobileimsdk.server.protocal.s.PLoginInfoResponse;
+
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.util.Observable;
+import java.util.Observer;
+
+public final class LocalUDPDataReceiver
 {
-	private static final String TAG = LocalUDPDataReciever.class.getSimpleName();
+	private static final String TAG = LocalUDPDataReceiver.class.getSimpleName();
 
 	private Thread thread = null;
 
-	private static LocalUDPDataReciever instance = null;
+	private static LocalUDPDataReceiver instance = null;
 
 	private static MessageHandler messageHandler = null;
 
 	private Context context = null;
 
-	public static LocalUDPDataReciever getInstance(Context context)
+	public static LocalUDPDataReceiver getInstance(Context context)
 	{
 		if (instance == null)
 		{
-			instance = new LocalUDPDataReciever(context);
+			instance = new LocalUDPDataReceiver(context);
 			messageHandler = new MessageHandler(context);
 		}
 		return instance;
 	}
 
-	private LocalUDPDataReciever(Context context)
+	private LocalUDPDataReceiver(Context context)
 	{
 		this.context = context;
 	}
@@ -76,15 +77,15 @@ public class LocalUDPDataReciever
 					try
 					{
 						if (ClientCoreSDK.DEBUG) {
-							Log.d(LocalUDPDataReciever.TAG, "【IMCORE】本地UDP端口侦听中，端口=" + ConfigEntity.localUDPPort + "...");
+							Log.d(LocalUDPDataReceiver.TAG, "【IMCORE】本地UDP端口侦听中，端口=" + ConfigEntity.localUDPPort + "...");
 						}
 
 						//开始侦听
-						LocalUDPDataReciever.this.p2pListeningImpl();
+						LocalUDPDataReceiver.this.p2pListeningImpl();
 					}
 					catch (Exception eee)
 					{
-						Log.w(LocalUDPDataReciever.TAG, "【IMCORE】本地UDP监听停止了(socket被关闭了?)," + eee.getMessage(), eee);
+						Log.w(LocalUDPDataReceiver.TAG, "【IMCORE】本地UDP监听停止了(socket被关闭了?)," + eee.getMessage(), eee);
 					}
 				}
 			});
@@ -120,7 +121,7 @@ public class LocalUDPDataReciever
 	{
 		private Context context = null;
 
-		public MessageHandler(Context context)
+		MessageHandler(Context context)
 		{
 			this.context = context;
 		}
@@ -134,30 +135,30 @@ public class LocalUDPDataReciever
 
 			try
 			{
-				Protocal pFromServer = 
-						ProtocalFactory.parse(packet.getData(), packet.getLength());
+				Protocol pFromServer =
+						ProtocolFactory.parse(packet.getData(), packet.getLength());
 
 				if (pFromServer.isQoS())
 				{
-					if (QoS4ReciveDaemon.getInstance(this.context).hasRecieved(pFromServer.getFp()))
+					if (QoS4ReceiveDaemon.getInstance(this.context).hasReceived(pFromServer.getFp()))
 					{
 						if (ClientCoreSDK.DEBUG) {
-							Log.d(LocalUDPDataReciever.TAG, "【IMCORE】【QoS机制】" + pFromServer.getFp() + "已经存在于发送列表中，这是重复包，通知应用层收到该包罗！");
+							Log.d(LocalUDPDataReceiver.TAG, "【IMCORE】【QoS机制】" + pFromServer.getFp() + "已经存在于发送列表中，这是重复包，通知应用层收到该包罗！");
 						}
-						QoS4ReciveDaemon.getInstance(this.context).addRecieved(pFromServer);
-						sendRecievedBack(pFromServer);
+						QoS4ReceiveDaemon.getInstance(this.context).addReceived(pFromServer);
+						sendReceivedBack(pFromServer);
 
 						return;
 					}
 
-					QoS4ReciveDaemon.getInstance(this.context).addRecieved(pFromServer);
+					QoS4ReceiveDaemon.getInstance(this.context).addReceived(pFromServer);
 
-					sendRecievedBack(pFromServer);
+					sendReceivedBack(pFromServer);
 				}
 
 				switch (pFromServer.getType())
 				{
-					case ProtocalType.C.FROM_CLIENT_TYPE_OF_COMMON$DATA:
+					case ProtocolType.C.FROM_CLIENT_TYPE_OF_COMMON$DATA:
 					{
 						if (ClientCoreSDK.getInstance().getChatTransDataEvent() == null)
 							break;
@@ -166,19 +167,19 @@ public class LocalUDPDataReciever
 	
 						break;
 					}
-					case ProtocalType.S.FROM_SERVER_TYPE_OF_RESPONSE$KEEP$ALIVE:
+					case ProtocolType.S.FROM_SERVER_TYPE_OF_RESPONSE$KEEP$ALIVE:
 					{
 						if (ClientCoreSDK.DEBUG) {
-							Log.d(LocalUDPDataReciever.TAG, "【IMCORE】收到服务端回过来的Keep Alive心跳响应包.");
+							Log.d(LocalUDPDataReceiver.TAG, "【IMCORE】收到服务端回过来的Keep Alive心跳响应包.");
 						}
-						KeepAliveDaemon.getInstance(this.context).updateGetKeepAliveResponseFromServerTimstamp();
+						KeepAliveDaemon.getInstance(this.context).updateGetKeepAliveResponseFromServerTimestamp();
 						break;
 					}
-					case ProtocalType.C.FROM_CLIENT_TYPE_OF_RECIVED:
+					case ProtocolType.C.FROM_CLIENT_TYPE_OF_RECEIVED:
 					{
 						String theFingerPrint = pFromServer.getDataContent();
 						if (ClientCoreSDK.DEBUG) {
-							Log.d(LocalUDPDataReciever.TAG, "【IMCORE】【QoS】收到" + pFromServer.getFrom() + "发过来的指纹为" + theFingerPrint + "的应答包.");
+							Log.d(LocalUDPDataReceiver.TAG, "【IMCORE】【QoS】收到" + pFromServer.getFrom() + "发过来的指纹为" + theFingerPrint + "的应答包.");
 						}
 	
 						if (ClientCoreSDK.getInstance().getMessageQoSEvent() != null) {
@@ -188,9 +189,9 @@ public class LocalUDPDataReciever
 						QoS4SendDaemon.getInstance(this.context).remove(theFingerPrint);
 						break;
 					}
-					case ProtocalType.S.FROM_SERVER_TYPE_OF_RESPONSE$LOGIN:
+					case ProtocolType.S.FROM_SERVER_TYPE_OF_RESPONSE$LOGIN:
 					{
-						PLoginInfoResponse loginInfoRes = ProtocalFactory.parsePLoginInfoResponse(pFromServer.getDataContent());
+						PLoginInfoResponse loginInfoRes = ProtocolFactory.parsePLoginInfoResponse(pFromServer.getDataContent());
 	
 						if (loginInfoRes.getCode() == 0)
 						{
@@ -203,7 +204,7 @@ public class LocalUDPDataReciever
 								public void update(Observable observable, Object data)
 								{
 									QoS4SendDaemon.getInstance(MessageHandler.this.context).stop();
-									QoS4ReciveDaemon.getInstance(MessageHandler.this.context).stop();
+									QoS4ReceiveDaemon.getInstance(MessageHandler.this.context).stop();
 									ClientCoreSDK.getInstance().setConnectedToServer(false);
 									ClientCoreSDK.getInstance().setCurrentUserId(-1);
 									ClientCoreSDK.getInstance().getChatBaseEvent().onLinkCloseMessage(-1);
@@ -212,7 +213,7 @@ public class LocalUDPDataReciever
 							});
 							KeepAliveDaemon.getInstance(this.context).start(false);
 							QoS4SendDaemon.getInstance(this.context).startup(true);
-							QoS4ReciveDaemon.getInstance(this.context).startup(true);
+							QoS4ReceiveDaemon.getInstance(this.context).startup(true);
 							ClientCoreSDK.getInstance().setConnectedToServer(true);
 						}
 						else
@@ -227,14 +228,14 @@ public class LocalUDPDataReciever
 								loginInfoRes.getUser_id(), loginInfoRes.getCode());
 						break;
 					}
-					case ProtocalType.S.FROM_SERVER_TYPE_OF_RESPONSE$FOR$ERROR:
+					case ProtocolType.S.FROM_SERVER_TYPE_OF_RESPONSE$FOR$ERROR:
 					{
-						PErrorResponse errorRes = ProtocalFactory.parsePErrorResponse(pFromServer.getDataContent());
+						PErrorResponse errorRes = ProtocolFactory.parsePErrorResponse(pFromServer.getDataContent());
 	
 						if (errorRes.getErrorCode() == 301)
 						{
 							ClientCoreSDK.getInstance().setLoginHasInit(false);
-							Log.e(LocalUDPDataReciever.TAG, "【IMCORE】收到服务端的“尚未登陆”的错误消息，心跳线程将停止，请应用层重新登陆.");
+							Log.e(LocalUDPDataReceiver.TAG, "【IMCORE】收到服务端的“尚未登陆”的错误消息，心跳线程将停止，请应用层重新登陆.");
 							KeepAliveDaemon.getInstance(this.context).stop();
 							AutoReLoginDaemon.getInstance(this.context).start(false);
 						}
@@ -247,22 +248,22 @@ public class LocalUDPDataReciever
 						break;
 					}
 					default:
-						Log.w(LocalUDPDataReciever.TAG, "【IMCORE】收到的服务端消息类型：" + pFromServer.getType() + "，但目前该类型客户端不支持解析和处理！");
+						Log.w(LocalUDPDataReceiver.TAG, "【IMCORE】收到的服务端消息类型：" + pFromServer.getType() + "，但目前该类型客户端不支持解析和处理！");
 				}
 			}
 			catch (Exception e)
 			{
-				Log.w(LocalUDPDataReciever.TAG, "【IMCORE】处理消息的过程中发生了错误.", e);
+				Log.w(LocalUDPDataReceiver.TAG, "【IMCORE】处理消息的过程中发生了错误.", e);
 			}
 		}
 
-		private void sendRecievedBack(final Protocal pFromServer)
+		private void sendReceivedBack(final Protocol pFromServer)
 		{
 			if(pFromServer.getFp() != null)
 			{
 				new LocalUDPDataSender.SendCommonDataAsync(
 						context
-						, ProtocalFactory.createRecivedBack(
+						, ProtocolFactory.createReceivedBack(
 								pFromServer.getTo()
 								, pFromServer.getFrom()
 								, pFromServer.getFp())){

@@ -11,9 +11,9 @@
  */
 package net.openmob.mobileimsdk.android.event;
 
-public abstract interface ChatTransDataEvent
+public interface ChatTransDataEvent
 {
-  public abstract void onTransBuffer(String paramString1, int paramInt, String paramString2);
+  void onTransBuffer(String paramString1, int paramInt, String paramString2);
 
-  public abstract void onErrorResponse(int paramInt, String paramString);
+  void onErrorResponse(int paramInt, String paramString);
 }

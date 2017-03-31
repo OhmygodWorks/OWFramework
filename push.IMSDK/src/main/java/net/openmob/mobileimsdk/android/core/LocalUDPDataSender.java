@@ -11,19 +11,20 @@
  */
 package net.openmob.mobileimsdk.android.core;
 
-import java.net.DatagramSocket;
-import java.net.InetAddress;
+import android.content.Context;
+import android.os.AsyncTask;
+import android.util.Log;
 
 import net.openmob.mobileimsdk.android.ClientCoreSDK;
 import net.openmob.mobileimsdk.android.conf.ConfigEntity;
 import net.openmob.mobileimsdk.android.utils.UDPUtils;
 import net.openmob.mobileimsdk.server.protocal.CharsetHelper;
 import net.openmob.mobileimsdk.server.protocal.ErrorCode;
-import net.openmob.mobileimsdk.server.protocal.Protocal;
-import net.openmob.mobileimsdk.server.protocal.ProtocalFactory;
-import android.content.Context;
-import android.os.AsyncTask;
-import android.util.Log;
+import net.openmob.mobileimsdk.server.protocal.Protocol;
+import net.openmob.mobileimsdk.server.protocal.ProtocolFactory;
+
+import java.net.DatagramSocket;
+import java.net.InetAddress;
 
 public class LocalUDPDataSender
 {
@@ -46,7 +47,7 @@ public class LocalUDPDataSender
 
 	int sendLogin(String loginName, String loginPsw, String extra)
 	{
-		byte[] b = ProtocalFactory.createPLoginInfo(loginName, loginPsw, extra).toBytes();
+		byte[] b = ProtocolFactory.createPLoginInfo(loginName, loginPsw, extra).toBytes();
 		int code = send(b, b.length);
 		// 登陆信息成功发出时就把登陆名存下来
 		if(code == 0)
@@ -59,12 +60,12 @@ public class LocalUDPDataSender
 		return code;
 	}
 
-	public int sendLoginout()
+	public int sendLogout()
 	{
 		int code = ErrorCode.COMMON_CODE_OK;
 		if(ClientCoreSDK.getInstance().isLoginHasInit())
 		{
-			byte[] b = ProtocalFactory.createPLoginoutInfo(
+			byte[] b = ProtocolFactory.createPLogoutInfo(
 					ClientCoreSDK.getInstance().getCurrentUserId()
 					, ClientCoreSDK.getInstance().getCurrentLoginName()).toBytes();
 			code = send(b, b.length);
@@ -86,7 +87,7 @@ public class LocalUDPDataSender
 
 	int sendKeepAlive()
 	{
-		byte[] b = ProtocalFactory.createPKeepAlive(ClientCoreSDK.getInstance().getCurrentUserId()).toBytes();
+		byte[] b = ProtocolFactory.createPKeepAlive(ClientCoreSDK.getInstance().getCurrentUserId()).toBytes();
 		return send(b, b.length);
 	}
 
@@ -104,18 +105,18 @@ public class LocalUDPDataSender
 
 	public int sendCommonData(String dataContentWidthStr, int to_user_id)
 	{
-		return sendCommonData(ProtocalFactory.createCommonData(dataContentWidthStr, 
+		return sendCommonData(ProtocolFactory.createCommonData(dataContentWidthStr,
 				ClientCoreSDK.getInstance().getCurrentUserId(), to_user_id));
 	}
 
 	public int sendCommonData(String dataContentWidthStr
 			, int to_user_id, boolean QoS, String fingerPrint)
 	{
-		return sendCommonData(ProtocalFactory.createCommonData(dataContentWidthStr, 
+		return sendCommonData(ProtocolFactory.createCommonData(dataContentWidthStr,
 				ClientCoreSDK.getInstance().getCurrentUserId(), to_user_id, QoS, fingerPrint));
 	}
 
-	public int sendCommonData(Protocal p)
+	public int sendCommonData(Protocol p)
 	{
 		if(p != null)
 		{
@@ -132,10 +133,10 @@ public class LocalUDPDataSender
 			return code;
 		}
 		else
-			return ErrorCode.COMMON_INVALID_PROTOCAL;
+			return ErrorCode.COMMON_INVALID_PROTOCOL;
 	}
 
-	private int send(byte[] fullProtocalBytes, int dataLen)
+	private int send(byte[] fullProtocolBytes, int dataLen)
 	{
 		if(!ClientCoreSDK.getInstance().isInitialed())
 			return ErrorCode.ForC.CLIENT_SDK_NO_INITIALED;
@@ -168,13 +169,13 @@ public class LocalUDPDataSender
 				return ErrorCode.ForC.BAD_CONNECT_TO_SERVER;
 			}
 		}
-		return UDPUtils.send(ds, fullProtocalBytes, dataLen) ? ErrorCode.COMMON_CODE_OK : ErrorCode.COMMON_DATA_SEND_FAILD;
+		return UDPUtils.send(ds, fullProtocolBytes, dataLen) ? ErrorCode.COMMON_CODE_OK : ErrorCode.COMMON_DATA_SEND_FAILED;
 	}
 
 	public static abstract class SendCommonDataAsync extends AsyncTask<Object, Integer, Integer>
 	{
 		protected Context context = null;
-		protected Protocal p = null;
+		protected Protocol p = null;
 
 		public SendCommonDataAsync(Context context, byte[] dataContent, int dataLen, int to_user_id)
 		{
@@ -189,18 +190,18 @@ public class LocalUDPDataSender
 		public SendCommonDataAsync(Context context, String dataContentWidthStr, int to_user_id, boolean QoS, String fingerPrint)
 		{
 			this(context, 
-					ProtocalFactory.createCommonData(dataContentWidthStr, 
+					ProtocolFactory.createCommonData(dataContentWidthStr,
 							ClientCoreSDK.getInstance().getCurrentUserId(), to_user_id, QoS, fingerPrint));
 		}
 
 		public SendCommonDataAsync(Context context, String dataContentWidthStr, int to_user_id)
 		{
 			this(context, 
-					ProtocalFactory.createCommonData(dataContentWidthStr, 
+					ProtocolFactory.createCommonData(dataContentWidthStr,
 							ClientCoreSDK.getInstance().getCurrentUserId(), to_user_id));
 		}
 
-		public SendCommonDataAsync(Context context, Protocal p) {
+		public SendCommonDataAsync(Context context, Protocol p) {
 			if (p == null)
 			{
 				Log.w(LocalUDPDataSender.TAG, "【IMCORE】无效的参数p==null!");
@@ -213,8 +214,8 @@ public class LocalUDPDataSender
 		protected Integer doInBackground(Object[] params)
 		{
 			if (this.p != null)
-				return Integer.valueOf(LocalUDPDataSender.getInstance(this.context).sendCommonData(this.p));
-			return Integer.valueOf(-1);
+				return LocalUDPDataSender.getInstance(this.context).sendCommonData(this.p);
+			return -1;
 		}
 
 		protected abstract void onPostExecute(Integer paramInteger);
@@ -244,21 +245,21 @@ public class LocalUDPDataSender
 		{
 			int code = LocalUDPDataSender.getInstance(this.context)
 					.sendLogin(this.loginName, this.loginPsw, this.extra);
-			return Integer.valueOf(code);
+			return code;
 		}
 
 		protected void onPostExecute(Integer code)
 		{
-			if (code.intValue() == 0)
+			if (code!=null && code == 0)
 			{
-				LocalUDPDataReciever.getInstance(this.context).startup();
+				LocalUDPDataReceiver.getInstance(this.context).startup();
 			}
 			else
 			{
 				Log.d(LocalUDPDataSender.TAG, "【IMCORE】数据发送失败, 错误码是：" + code + "！");
 			}
 
-			fireAfterSendLogin(code.intValue());
+			fireAfterSendLogin(code==null? 0: code);
 		}
 
 		protected void fireAfterSendLogin(int code)

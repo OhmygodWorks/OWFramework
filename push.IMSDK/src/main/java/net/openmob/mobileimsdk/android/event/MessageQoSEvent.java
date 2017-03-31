@@ -11,12 +11,13 @@
  */
 package net.openmob.mobileimsdk.android.event;
 
+import net.openmob.mobileimsdk.server.protocal.Protocol;
+
 import java.util.ArrayList;
-import net.openmob.mobileimsdk.server.protocal.Protocal;
 
-public abstract interface MessageQoSEvent
+public interface MessageQoSEvent
 {
-  public abstract void messagesLost(ArrayList<Protocal> paramArrayList);
+  void messagesLost(ArrayList<Protocol> paramArrayList);
 
-  public abstract void messagesBeReceived(String paramString);
+  void messagesBeReceived(String paramString);
 }

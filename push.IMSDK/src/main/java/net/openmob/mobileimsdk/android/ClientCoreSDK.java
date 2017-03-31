@@ -21,13 +21,17 @@ import android.net.NetworkInfo;
 import android.util.Log;
 import net.openmob.mobileimsdk.android.core.AutoReLoginDaemon;
 import net.openmob.mobileimsdk.android.core.KeepAliveDaemon;
-import net.openmob.mobileimsdk.android.core.LocalUDPDataReciever;
+import net.openmob.mobileimsdk.android.core.LocalUDPDataReceiver;
 import net.openmob.mobileimsdk.android.core.LocalUDPSocketProvider;
-import net.openmob.mobileimsdk.android.core.QoS4ReciveDaemon;
+import net.openmob.mobileimsdk.android.core.QoS4ReceiveDaemon;
 import net.openmob.mobileimsdk.android.core.QoS4SendDaemon;
 import net.openmob.mobileimsdk.android.event.ChatBaseEvent;
 import net.openmob.mobileimsdk.android.event.ChatTransDataEvent;
 import net.openmob.mobileimsdk.android.event.MessageQoSEvent;
+
+import static android.content.Context.CONNECTIVITY_SERVICE;
+import static android.net.ConnectivityManager.TYPE_MOBILE;
+import static android.net.ConnectivityManager.TYPE_WIFI;
 
 public class ClientCoreSDK
 {
@@ -52,7 +56,7 @@ public class ClientCoreSDK
 	private String currentLoginName = null;
 
 	private String currentLoginPsw = null;
-	
+
 	private String currentLoginExtra = null;
 
 	private ChatBaseEvent chatBaseEvent = null;
@@ -67,9 +71,9 @@ public class ClientCoreSDK
 	{
 		public void onReceive(Context context, Intent intent)
 		{
-			ConnectivityManager connectMgr = (ConnectivityManager) context.getSystemService(context.CONNECTIVITY_SERVICE); 
-			NetworkInfo mobNetInfo = connectMgr.getNetworkInfo(ConnectivityManager.TYPE_MOBILE); 
-			NetworkInfo wifiNetInfo = connectMgr.getNetworkInfo(ConnectivityManager.TYPE_WIFI); 
+			ConnectivityManager connectMgr = (ConnectivityManager) context.getSystemService(CONNECTIVITY_SERVICE);
+			NetworkInfo mobNetInfo = connectMgr.getNetworkInfo(TYPE_MOBILE);
+			NetworkInfo wifiNetInfo = connectMgr.getNetworkInfo(TYPE_WIFI);
 			if (!(mobNetInfo != null && mobNetInfo.isConnected())
 					&& !(wifiNetInfo != null && wifiNetInfo.isConnected()))
 			{
@@ -129,15 +133,15 @@ public class ClientCoreSDK
 	public void release()
 	{
 		// 尝试停掉掉线重连线程（如果线程正在运行的话）
-	    AutoReLoginDaemon.getInstance(context).stop(); // 2014-11-08 add by Jack Jiang
+		AutoReLoginDaemon.getInstance(context).stop(); // 2014-11-08 add by Jack Jiang
 		// 尝试停掉QoS质量保证（发送）心跳线程
 		QoS4SendDaemon.getInstance(context).stop();
 		// 尝试停掉Keep Alive心跳线程
 		KeepAliveDaemon.getInstance(context).stop();
 		// 尝试停掉消息接收者
-		LocalUDPDataReciever.getInstance(context).stop();
+		LocalUDPDataReceiver.getInstance(context).stop();
 		// 尝试停掉QoS质量保证（接收防重复机制）心跳线程
-		QoS4ReciveDaemon.getInstance(context).stop();
+		QoS4ReceiveDaemon.getInstance(context).stop();
 		// 尝试关闭本地Socket
 		LocalUDPSocketProvider.getInstance().closeLocalUDPSocket();
 		

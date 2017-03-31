@@ -12,9 +12,11 @@
 package net.openmob.mobileimsdk.android.core;
 
 import android.util.Log;
-import java.net.DatagramSocket;
+
 import net.openmob.mobileimsdk.android.ClientCoreSDK;
 import net.openmob.mobileimsdk.android.conf.ConfigEntity;
+
+import java.net.DatagramSocket;
 
 public class LocalUDPSocketProvider
 {
@@ -93,7 +95,7 @@ public class LocalUDPSocketProvider
 		}
 		catch (Exception e)
 		{
-			Log.w(TAG, "【IMCORE】lcloseLocalUDPSocket时出错，原因是：" + e.getMessage(), e);
+			Log.w(TAG, "【IMCORE】closeLocalUDPSocket时出错，原因是：" + e.getMessage(), e);
 		}
 	}
 }

@@ -17,7 +17,7 @@ import android.os.Handler;
 import android.util.Log;
 import net.openmob.mobileimsdk.android.ClientCoreSDK;
 
-public class AutoReLoginDaemon
+public final class AutoReLoginDaemon
 {
 	private static final String TAG = AutoReLoginDaemon.class.getSimpleName();
 
@@ -26,7 +26,7 @@ public class AutoReLoginDaemon
 	private Handler handler = null;
 	private Runnable runnable = null;
 	private boolean autoReLoginRunning = false;
-	private boolean _excuting = false;
+	private boolean _executing = false;
 
 	private static AutoReLoginDaemon instance = null;
 
@@ -52,13 +52,13 @@ public class AutoReLoginDaemon
 		{
 			public void run()
 			{
-				if (!AutoReLoginDaemon.this._excuting)
+				if (!AutoReLoginDaemon.this._executing)
 				{
 					new AsyncTask<Object, Integer, Integer>()
 					{
 						protected Integer doInBackground(Object[] params)
 						{
-							AutoReLoginDaemon.this._excuting = true;
+							AutoReLoginDaemon.this._executing = true;
 							if (ClientCoreSDK.DEBUG)
 								Log.d(AutoReLoginDaemon.TAG
 										, "【IMCORE】自动重新登陆线程执行中, autoReLogin?" + ClientCoreSDK.autoReLogin + "...");
@@ -72,12 +72,12 @@ public class AutoReLoginDaemon
 												, ClientCoreSDK.getInstance().getCurrentLoginPsw()
 												, ClientCoreSDK.getInstance().getCurrentLoginExtra());
 							}
-							return Integer.valueOf(code);
+							return code;
 						}
 
 						protected void onPostExecute(Integer result)
 						{
-							if (result.intValue() == 0)
+							if (result!=null && result == 0)
 							{
 								// *********************** 同样的代码也存在于LocalUDPDataSender.SendLoginDataAsync中的代码
 								// 登陆消息成功发出后就启动本地消息侦听线程：
@@ -86,11 +86,11 @@ public class AutoReLoginDaemon
 								//      当首次登陆后，因服务端或其它网络原因导致本地监听出错，将导致中断本地监听线程，
 								//	          所以在此处在自动登陆重连或用户自已手机尝试再次登陆时重启监听线程就可以恢复本地
 								//	          监听线程的运行。
-								LocalUDPDataReciever.getInstance(AutoReLoginDaemon.this.context).startup();
+								LocalUDPDataReceiver.getInstance(AutoReLoginDaemon.this.context).startup();
 							}
 
 							//
-							_excuting = false;
+							_executing = false;
 							// 开始下一个心跳循环
 							handler.postDelayed(runnable, AUTO_RE$LOGIN_INTERVAL);
 						}
@@ -115,7 +115,7 @@ public class AutoReLoginDaemon
 		this.autoReLoginRunning = true;
 	}
 
-	public boolean isautoReLoginRunning()
+	public boolean isAutoReLoginRunning()
 	{
 		return this.autoReLoginRunning;
 	}
