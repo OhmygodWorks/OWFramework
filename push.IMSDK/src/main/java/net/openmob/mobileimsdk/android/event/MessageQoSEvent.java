@@ -11,7 +11,7 @@
  */
 package net.openmob.mobileimsdk.android.event;
 
-import net.openmob.mobileimsdk.server.protocal.Protocol;
+import net.openmob.mobileimsdk.server.protocol.Protocol;
 
 import java.util.ArrayList;
 

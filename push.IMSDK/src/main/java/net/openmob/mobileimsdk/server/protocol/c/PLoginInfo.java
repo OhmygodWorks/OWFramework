@@ -9,7 +9,7 @@
  * PLoginInfo.java at 2016-2-20 11:26:02, code by Jack Jiang.
  * You can contact author with jack.jiang@52im.net or jb2011@163.com.
  */
-package net.openmob.mobileimsdk.server.protocal.c;
+package net.openmob.mobileimsdk.server.protocol.c;
 
 public class PLoginInfo
 {

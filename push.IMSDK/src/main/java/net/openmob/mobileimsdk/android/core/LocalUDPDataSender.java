@@ -18,10 +18,10 @@ import android.util.Log;
 import net.openmob.mobileimsdk.android.ClientCoreSDK;
 import net.openmob.mobileimsdk.android.conf.ConfigEntity;
 import net.openmob.mobileimsdk.android.utils.UDPUtils;
-import net.openmob.mobileimsdk.server.protocal.CharsetHelper;
-import net.openmob.mobileimsdk.server.protocal.ErrorCode;
-import net.openmob.mobileimsdk.server.protocal.Protocol;
-import net.openmob.mobileimsdk.server.protocal.ProtocolFactory;
+import net.openmob.mobileimsdk.server.protocol.CharsetHelper;
+import net.openmob.mobileimsdk.server.protocol.ErrorCode;
+import net.openmob.mobileimsdk.server.protocol.Protocol;
+import net.openmob.mobileimsdk.server.protocol.ProtocolFactory;
 
 import java.net.DatagramSocket;
 import java.net.InetAddress;

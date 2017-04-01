@@ -15,7 +15,7 @@ import java.util.ArrayList;
 import java.util.concurrent.ConcurrentHashMap;
 
 import net.openmob.mobileimsdk.android.ClientCoreSDK;
-import net.openmob.mobileimsdk.server.protocal.Protocol;
+import net.openmob.mobileimsdk.server.protocol.Protocol;
 import android.content.Context;
 import android.os.AsyncTask;
 import android.os.Handler;

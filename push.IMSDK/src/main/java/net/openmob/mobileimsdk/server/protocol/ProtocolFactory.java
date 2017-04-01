@@ -9,15 +9,11 @@
  * ProtocalFactory.java at 2016-2-20 11:26:02, code by Jack Jiang.
  * You can contact author with jack.jiang@52im.net or jb2011@163.com.
  */
-package net.openmob.mobileimsdk.server.protocal;
+package net.openmob.mobileimsdk.server.protocol;
 
 import com.alibaba.fastjson.JSON;
 
-import net.openmob.mobileimsdk.server.protocal.c.PKeepAlive;
-import net.openmob.mobileimsdk.server.protocal.c.PLoginInfo;
-import net.openmob.mobileimsdk.server.protocal.s.PErrorResponse;
-import net.openmob.mobileimsdk.server.protocal.s.PKeepAliveResponse;
-import net.openmob.mobileimsdk.server.protocal.s.PLoginInfoResponse;
+import net.openmob.mobileimsdk.server.protocol.s.PErrorResponse;
 
 public final class ProtocolFactory
 {
@@ -48,23 +44,23 @@ public final class ProtocolFactory
 	public static Protocol createPKeepAliveResponse(int to_user_id)
 	{
 		return new Protocol(ProtocolType.S.FROM_SERVER_TYPE_OF_RESPONSE$KEEP$ALIVE,
-				create(new PKeepAliveResponse()), 0, to_user_id);
+				create(new net.openmob.mobileimsdk.server.protocol.s.PKeepAliveResponse()), 0, to_user_id);
 	}
 
-	public static PKeepAliveResponse parsePKeepAliveResponse(String dataContentOfProtocal)
+	public static net.openmob.mobileimsdk.server.protocol.s.PKeepAliveResponse parsePKeepAliveResponse(String dataContentOfProtocal)
 	{
-		return parse(dataContentOfProtocal, PKeepAliveResponse.class);
+		return parse(dataContentOfProtocal, net.openmob.mobileimsdk.server.protocol.s.PKeepAliveResponse.class);
 	}
 
 	public static Protocol createPKeepAlive(int from_user_id)
 	{
 		return new Protocol(ProtocolType.C.FROM_CLIENT_TYPE_OF_KEEP$ALIVE,
-				create(new PKeepAlive()), from_user_id, 0);
+				create(new net.openmob.mobileimsdk.server.protocol.c.PKeepAlive()), from_user_id, 0);
 	}
 
-	public static PKeepAlive parsePKeepAlive(String dataContentOfProtocal)
+	public static net.openmob.mobileimsdk.server.protocol.c.PKeepAlive parsePKeepAlive(String dataContentOfProtocal)
 	{
-		return parse(dataContentOfProtocal, PKeepAlive.class);
+		return parse(dataContentOfProtocal, net.openmob.mobileimsdk.server.protocol.c.PKeepAlive.class);
 	}
 
 	public static Protocol createPErrorResponse(int errorCode, String errorMsg, int user_id)
@@ -89,26 +85,26 @@ public final class ProtocolFactory
 	public static Protocol createPLoginInfo(String loginName, String loginPsw, String extra)
 	{
 		return new Protocol(ProtocolType.C.FROM_CLIENT_TYPE_OF_LOGIN
-				, create(new PLoginInfo(loginName, loginPsw, extra)), -1, 0);
+				, create(new net.openmob.mobileimsdk.server.protocol.c.PLoginInfo(loginName, loginPsw, extra)), -1, 0);
 	}
 
-	public static PLoginInfo parsePLoginInfo(String dataContentOfProtocal)
+	public static net.openmob.mobileimsdk.server.protocol.c.PLoginInfo parsePLoginInfo(String dataContentOfProtocal)
 	{
-		return parse(dataContentOfProtocal, PLoginInfo.class);
+		return parse(dataContentOfProtocal, net.openmob.mobileimsdk.server.protocol.c.PLoginInfo.class);
 	}
 
 	public static Protocol createPLoginInfoResponse(int code, int user_id)
 	{
 		return new Protocol(ProtocolType.S.FROM_SERVER_TYPE_OF_RESPONSE$LOGIN,
-				create(new PLoginInfoResponse(code, user_id)), 
+				create(new net.openmob.mobileimsdk.server.protocol.s.PLoginInfoResponse(code, user_id)),
 				0, 
 				user_id, 
 				true, Protocol.genFingerPrint());
 	}
 
-	public static PLoginInfoResponse parsePLoginInfoResponse(String dataContentOfProtocal)
+	public static net.openmob.mobileimsdk.server.protocol.s.PLoginInfoResponse parsePLoginInfoResponse(String dataContentOfProtocal)
 	{
-		return parse(dataContentOfProtocal, PLoginInfoResponse.class);
+		return parse(dataContentOfProtocal, net.openmob.mobileimsdk.server.protocol.s.PLoginInfoResponse.class);
 	}
 
 	public static Protocol createCommonData(String dataContent, int from_user_id, int to_user_id, boolean QoS, String fingerPrint)

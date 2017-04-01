@@ -9,7 +9,7 @@
  * Protocal.java at 2016-2-20 11:26:03, code by Jack Jiang.
  * You can contact author with jack.jiang@52im.net or jb2011@163.com.
  */
-package net.openmob.mobileimsdk.server.protocal;
+package net.openmob.mobileimsdk.server.protocol;
 
 import com.alibaba.fastjson.JSON;
 

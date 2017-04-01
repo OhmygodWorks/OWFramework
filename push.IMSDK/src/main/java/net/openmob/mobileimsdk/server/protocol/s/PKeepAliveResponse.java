@@ -9,7 +9,7 @@
  * PKeepAliveResponse.java at 2016-2-20 11:26:02, code by Jack Jiang.
  * You can contact author with jack.jiang@52im.net or jb2011@163.com.
  */
-package net.openmob.mobileimsdk.server.protocal.s;
+package net.openmob.mobileimsdk.server.protocol.s;
 
 public class PKeepAliveResponse
 {
