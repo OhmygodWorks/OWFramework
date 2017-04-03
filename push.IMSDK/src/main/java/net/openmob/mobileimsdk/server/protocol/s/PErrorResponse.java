@@ -11,34 +11,32 @@
  */
 package net.openmob.mobileimsdk.server.protocol.s;
 
+import com.alibaba.fastjson.annotation.JSONCreator;
+import com.alibaba.fastjson.annotation.JSONField;
+
 public class PErrorResponse
 {
 	private int errorCode = -1;
 	private String errorMsg = null;
 
-	public PErrorResponse(int errorCode, String errorMsg)
-	{
+	@JSONCreator
+	public PErrorResponse(
+			@JSONField(name = "errorCode") int errorCode,
+			@JSONField(name = "errorMsg") String errorMsg
+	) {
 		this.errorCode = errorCode;
 		this.errorMsg = errorMsg;
 	}
 
+	@JSONField
 	public int getErrorCode()
 	{
 		return this.errorCode;
 	}
 
-	public void setErrorCode(int errorCode)
-	{
-		this.errorCode = errorCode;
-	}
-
+	@JSONField
 	public String getErrorMsg()
 	{
 		return this.errorMsg;
-	}
-
-	public void setErrorMsg(String errorMsg)
-	{
-		this.errorMsg = errorMsg;
 	}
 }

@@ -11,82 +11,75 @@
  */
 package net.openmob.mobileimsdk.android.core;
 
+import android.support.annotation.Nullable;
 import android.util.Log;
-
-import net.openmob.mobileimsdk.android.ClientCoreSDK;
-import net.openmob.mobileimsdk.android.conf.ConfigEntity;
 
 import java.net.DatagramSocket;
 
-public class LocalUDPSocketProvider
+import static net.openmob.mobileimsdk.android.ClientCoreSDK.DEBUG;
+import static net.openmob.mobileimsdk.android.conf.ConfigEntity.getLocalUDPPort;
+
+public final class LocalUDPSocketProvider
 {
 	private static final String TAG = LocalUDPSocketProvider.class.getSimpleName();
+	@Nullable
+	private static DatagramSocket localUDPSocket = null;
 
-	private DatagramSocket localUDPSocket = null;
+	private LocalUDPSocketProvider() {}
 
-	private static LocalUDPSocketProvider instance = null;
-
-	public static LocalUDPSocketProvider getInstance()
-	{
-		if (instance == null)
-			instance = new LocalUDPSocketProvider();
-		return instance;
-	}
-
-	private DatagramSocket resetLocalUDPSocket()
+	private static DatagramSocket resetLocalUDPSocket()
 	{
 		try
 		{
 			closeLocalUDPSocket();
-			if (ClientCoreSDK.DEBUG)
+			if (DEBUG) {
 				Log.d(TAG, "【IMCORE】new DatagramSocket()中...");
-			this.localUDPSocket = (ConfigEntity.localUDPPort == 0 ? 
-					new DatagramSocket() : new DatagramSocket(ConfigEntity.localUDPPort));
-			this.localUDPSocket.setReuseAddress(true);
-			if (ClientCoreSDK.DEBUG) {
+			}
+			localUDPSocket = (getLocalUDPPort() == 0 ?
+					new DatagramSocket() : new DatagramSocket(getLocalUDPPort()));
+			localUDPSocket.setReuseAddress(true);
+			if (DEBUG) {
 				Log.d(TAG, "【IMCORE】new DatagramSocket()已成功完成.");
 			}
-
-			return this.localUDPSocket;
+			return localUDPSocket;
 		}
 		catch (Exception e)
 		{
 			Log.w(TAG, "【IMCORE】localUDPSocket创建时出错，原因是：" + e.getMessage(), e);
-
 			closeLocalUDPSocket();
 			return null;
 		}
 	}
 
-	private boolean isLocalUDPSocketReady()
+	private static boolean isLocalUDPSocketReady()
 	{
-		return (this.localUDPSocket != null) && (!this.localUDPSocket.isClosed());
+		return (localUDPSocket != null) && (!localUDPSocket.isClosed());
 	}
 
-	public DatagramSocket getLocalUDPSocket()
+	static DatagramSocket getLocalUDPSocket()
 	{
 		if (isLocalUDPSocketReady())
 		{
-			if (ClientCoreSDK.DEBUG)
+			if (DEBUG)
 				Log.d(TAG, "【IMCORE】isLocalUDPSocketReady()==true，直接返回本地socket引用哦。");
-			return this.localUDPSocket;
+			return localUDPSocket;
+		} else {
+			if (DEBUG)
+				Log.d(TAG, "【IMCORE】isLocalUDPSocketReady()==false，需要先resetLocalUDPSocket()...");
+			return resetLocalUDPSocket();
 		}
-
-		if (ClientCoreSDK.DEBUG)
-			Log.d(TAG, "【IMCORE】isLocalUDPSocketReady()==false，需要先resetLocalUDPSocket()...");
-		return resetLocalUDPSocket();
 	}
 
-	public void closeLocalUDPSocket()
+	public static void closeLocalUDPSocket()
 	{
 		try
 		{
-			if (ClientCoreSDK.DEBUG)
+			if (DEBUG)
 				Log.d(TAG, "【IMCORE】正在closeLocalUDPSocket()...");
-			if (this.localUDPSocket != null)
+			if (localUDPSocket != null)
 			{
-				this.localUDPSocket.close();
-				this.localUDPSocket = null;
+				localUDPSocket.close();
+				localUDPSocket = null;
 			}
 			else
 			{

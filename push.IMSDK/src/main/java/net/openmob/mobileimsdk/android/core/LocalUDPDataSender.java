@@ -11,260 +11,208 @@
  */
 package net.openmob.mobileimsdk.android.core;
 
-import android.content.Context;
-import android.os.AsyncTask;
+import android.support.annotation.NonNull;
+import android.support.annotation.WorkerThread;
 import android.util.Log;
 
 import net.openmob.mobileimsdk.android.ClientCoreSDK;
-import net.openmob.mobileimsdk.android.conf.ConfigEntity;
 import net.openmob.mobileimsdk.android.utils.UDPUtils;
-import net.openmob.mobileimsdk.server.protocol.CharsetHelper;
-import net.openmob.mobileimsdk.server.protocol.ErrorCode;
 import net.openmob.mobileimsdk.server.protocol.Protocol;
-import net.openmob.mobileimsdk.server.protocol.ProtocolFactory;
 
 import java.net.DatagramSocket;
-import java.net.InetAddress;
 
-public class LocalUDPDataSender
+import io.reactivex.Maybe;
+import io.reactivex.Single;
+import io.reactivex.disposables.Disposable;
+
+import static android.text.TextUtils.isEmpty;
+import static io.reactivex.Single.just;
+import static io.reactivex.android.schedulers.AndroidSchedulers.mainThread;
+import static io.reactivex.schedulers.Schedulers.io;
+import static java.net.InetAddress.getByName;
+import static net.openmob.mobileimsdk.android.ClientCoreSDK.getCurrentLoginName;
+import static net.openmob.mobileimsdk.android.ClientCoreSDK.getCurrentUserId;
+import static net.openmob.mobileimsdk.android.ClientCoreSDK.isInitialed;
+import static net.openmob.mobileimsdk.android.ClientCoreSDK.isLocalDeviceNetworkOk;
+import static net.openmob.mobileimsdk.android.ClientCoreSDK.isLoginHasInit;
+import static net.openmob.mobileimsdk.android.ClientCoreSDK.setCurrentLoginExtra;
+import static net.openmob.mobileimsdk.android.ClientCoreSDK.setCurrentLoginName;
+import static net.openmob.mobileimsdk.android.ClientCoreSDK.setCurrentLoginPsw;
+import static net.openmob.mobileimsdk.android.conf.ConfigEntity.getServerIP;
+import static net.openmob.mobileimsdk.android.conf.ConfigEntity.getServerUDPPort;
+import static net.openmob.mobileimsdk.android.core.LocalUDPSocketProvider.getLocalUDPSocket;
+import static net.openmob.mobileimsdk.server.protocol.CharsetHelper.getString;
+import static net.openmob.mobileimsdk.server.protocol.ErrorCode.COMMON_CODE_OK;
+import static net.openmob.mobileimsdk.server.protocol.ErrorCode.COMMON_DATA_SEND_FAILED;
+import static net.openmob.mobileimsdk.server.protocol.ErrorCode.COMMON_INVALID_PROTOCOL;
+import static net.openmob.mobileimsdk.server.protocol.ErrorCode.ForC.BAD_CONNECT_TO_SERVER;
+import static net.openmob.mobileimsdk.server.protocol.ErrorCode.ForC.CLIENT_SDK_NO_INITIALED;
+import static net.openmob.mobileimsdk.server.protocol.ErrorCode.ForC.LOCAL_NETWORK_NOT_WORKING;
+import static net.openmob.mobileimsdk.server.protocol.ErrorCode.ForC.TO_SERVER_NET_INFO_NOT_SETUP;
+import static net.openmob.mobileimsdk.server.protocol.ProtocolFactory.createCommonData;
+import static net.openmob.mobileimsdk.server.protocol.ProtocolFactory.createPKeepAlive;
+import static net.openmob.mobileimsdk.server.protocol.ProtocolFactory.createPLoginInfo;
+import static net.openmob.mobileimsdk.server.protocol.ProtocolFactory.createPLogoutInfo;
+import static net.openmob.mobileimsdk.server.protocol.ProtocolFactory.createReceivedBack;
+
+public final class LocalUDPDataSender
 {
 	private static final String TAG = LocalUDPDataSender.class.getSimpleName();
-	private static LocalUDPDataSender instance = null;
 
-	private Context context = null;
+	private LocalUDPDataSender() {}
 
-	public static LocalUDPDataSender getInstance(Context context)
-	{
-		if (instance == null)
-			instance = new LocalUDPDataSender(context);
-		return instance;
+	public static Disposable login(String loginName, String loginPsw, String extra) {
+		return just(extra)
+				.subscribeOn(io())
+				.map(s -> sendLogin(loginName, loginPsw, extra))
+				.observeOn(mainThread())
+				.subscribe(code -> {
+					if (code!=null && code == COMMON_CODE_OK)
+					{
+						LocalUDPDataReceiver.startup();
+					}
+					else
+					{
+						Log.d(TAG, "【IMCORE】数据发送失败, 错误码是：" + code + "！");
+					}
+				});
 	}
 
-	private LocalUDPDataSender(Context context)
+	@WorkerThread
+	static int sendLogin(String loginName, String loginPsw, String extra)
 	{
-		this.context = context;
-	}
-
-	int sendLogin(String loginName, String loginPsw, String extra)
-	{
-		byte[] b = ProtocolFactory.createPLoginInfo(loginName, loginPsw, extra).toBytes();
+		byte[] b = createPLoginInfo(loginName, loginPsw, extra).toBytes();
 		int code = send(b, b.length);
 		// 登陆信息成功发出时就把登陆名存下来
-		if(code == 0)
+		if(code == COMMON_CODE_OK)
 		{
-			ClientCoreSDK.getInstance().setCurrentLoginName(loginName);
-			ClientCoreSDK.getInstance().setCurrentLoginPsw(loginPsw);
-			ClientCoreSDK.getInstance().setCurrentLoginExtra(extra);
+			setCurrentLoginName(loginName);
+			setCurrentLoginPsw(loginPsw);
+			setCurrentLoginExtra(extra);
 		}
-		
 		return code;
 	}
 
-	public int sendLogout()
-	{
-		int code = ErrorCode.COMMON_CODE_OK;
-		if(ClientCoreSDK.getInstance().isLoginHasInit())
-		{
-			byte[] b = ProtocolFactory.createPLogoutInfo(
-					ClientCoreSDK.getInstance().getCurrentUserId()
-					, ClientCoreSDK.getInstance().getCurrentLoginName()).toBytes();
-			code = send(b, b.length);
-			// 登出信息成功发出时
-			if(code == 0)
-			{
-//				// 发出退出登陆的消息同时也关闭心跳线程
-//				KeepAliveDaemon.getInstance(context).stop();
-//				// 重置登陆标识
-//				ClientCoreSDK.getInstance().setLoginHasInit(false);
-			}
-		}
-		
-		// 释放SDK资源
-		ClientCoreSDK.getInstance().release();
-		
-		return code;
+	public static Maybe<Integer> logout() {
+		return just(getCurrentUserId())
+				.subscribeOn(io())
+				.filter(i -> isLoginHasInit())
+				.map(id -> createPLogoutInfo(id, getCurrentLoginName()))
+				.map(Protocol::toBytes)
+				.map(b -> send(b, b.length))
+				.observeOn(mainThread())
+				.doOnSuccess(code -> {
+					// 登出信息成功发出时
+					if(code == COMMON_CODE_OK)
+					{
+//						// 发出退出登陆的消息同时也关闭心跳线程
+//						KeepAliveDaemon.getInstance(context).stop();
+//						// 重置登陆标识
+//						ClientCoreSDK.setLoginHasInit(false);
+					}
+				})
+				.doAfterSuccess(code -> ClientCoreSDK.release())
+				.doOnComplete(ClientCoreSDK::release);
 	}
 
-	int sendKeepAlive()
+	@WorkerThread
+	static int sendKeepAlive()
 	{
-		byte[] b = ProtocolFactory.createPKeepAlive(ClientCoreSDK.getInstance().getCurrentUserId()).toBytes();
+		byte[] b = createPKeepAlive(getCurrentUserId()).toBytes();
 		return send(b, b.length);
 	}
 
-	public int sendCommonData(byte[] dataContent, int dataLen, int to_user_id)
+	@WorkerThread
+	private static int sendCommonData(Protocol p)
 	{
-		return sendCommonData(
-				CharsetHelper.getString(dataContent, dataLen), to_user_id, false, null);
-	}
-
-	public int sendCommonData(byte[] dataContent, int dataLen, int to_user_id, boolean QoS, String fingerPrint)
-	{
-		return sendCommonData(
-				CharsetHelper.getString(dataContent, dataLen), to_user_id, QoS, fingerPrint);
-	}
-
-	public int sendCommonData(String dataContentWidthStr, int to_user_id)
-	{
-		return sendCommonData(ProtocolFactory.createCommonData(dataContentWidthStr,
-				ClientCoreSDK.getInstance().getCurrentUserId(), to_user_id));
-	}
-
-	public int sendCommonData(String dataContentWidthStr
-			, int to_user_id, boolean QoS, String fingerPrint)
-	{
-		return sendCommonData(ProtocolFactory.createCommonData(dataContentWidthStr,
-				ClientCoreSDK.getInstance().getCurrentUserId(), to_user_id, QoS, fingerPrint));
-	}
-
-	public int sendCommonData(Protocol p)
-	{
-		if(p != null)
+		if (p == null) return COMMON_INVALID_PROTOCOL;
+		byte[] b = p.toBytes();
+		int code = send(b, b.length);
+		if(code == COMMON_CODE_OK)
 		{
-			byte[] b = p.toBytes();
-			int code = send(b, b.length);
-			if(code == 0)
-			{
-				// 【【C2C或C2S模式下的QoS机制1/4步：将包加入到发送QoS队列中】】
-				// 如果需要进行QoS质量保证，则把它放入质量保证队列中供处理(已在存在于列
-				// 表中就不用再加了，已经存在则意味当前发送的这个是重传包哦)
-				if(p.isQoS() && !QoS4SendDaemon.getInstance(context).exist(p.getFp()))
-					QoS4SendDaemon.getInstance(context).put(p);
-			}
-			return code;
+			//【【C2C或C2S模式下的QoS机制1/4步：将包加入到发送QoS队列中】】
+			// 如果需要进行QoS质量保证，则把它放入质量保证队列中供处理(已在存在于列
+			// 表中就不用再加了，已经存在则意味当前发送的这个是重传包哦)
+			if (p.isQoS() && !QoS4SendDaemon.exist(p.getFp()))
+				QoS4SendDaemon.put(p);
 		}
-		else
-			return ErrorCode.COMMON_INVALID_PROTOCOL;
+		return code;
 	}
 
-	private int send(byte[] fullProtocolBytes, int dataLen)
+	@WorkerThread
+	private static int send(byte[] fullProtocolBytes, int dataLen)
 	{
-		if(!ClientCoreSDK.getInstance().isInitialed())
-			return ErrorCode.ForC.CLIENT_SDK_NO_INITIALED;
+		if(!isInitialed()) return CLIENT_SDK_NO_INITIALED;
 		
-		if(!ClientCoreSDK.getInstance().isLocalDeviceNetworkOk())
+		if(!isLocalDeviceNetworkOk())
 		{
 			Log.e(TAG, "【IMCORE】本地网络不能工作，send数据没有继续!");
-			return ErrorCode.ForC.LOCAL_NETWORK_NOT_WORKING;
+			return LOCAL_NETWORK_NOT_WORKING;
 		}
-		
-		DatagramSocket ds = LocalUDPSocketProvider.getInstance().getLocalUDPSocket();
+
+		DatagramSocket ds = getLocalUDPSocket();
 		// 如果Socket没有连接上服务端
-		if(ds != null && !ds.isConnected())
-		{
-			try
-			{
-				if(ConfigEntity.serverIP == null)
-				{
-					Log.w(TAG, "【IMCORE】send数据没有继续，原因是ConfigEntity.server_ip==null!");
-					return ErrorCode.ForC.TO_SERVER_NET_INFO_NOT_SETUP;
-				}
-				
-				// 即刻连接上服务端（如果不connect，即使在DataProgram中设置了远程id和地址则服务端MINA也收不到，跟普通的服
-				// 务端UDP貌似不太一样，普通UDP时客户端无需先connect可以直接send设置好远程ip和端口的DataPragramPackage）
-				ds.connect(InetAddress.getByName(ConfigEntity.serverIP), ConfigEntity.serverUDPPort);
+		if(ds != null && !ds.isConnected()) try {
+			if (isEmpty(getServerIP())) {
+				Log.w(TAG, "【IMCORE】send数据没有继续，原因是ConfigEntity.server_ip==null!");
+				return TO_SERVER_NET_INFO_NOT_SETUP;
 			}
-			catch (Exception e)
-			{
-				Log.w(TAG, "【IMCORE】send时出错，原因是："+e.getMessage(), e);
-				return ErrorCode.ForC.BAD_CONNECT_TO_SERVER;
-			}
+			// 即刻连接上服务端（如果不connect，即使在DataProgram中设置了远程id和地址则服务端MINA也收不到，跟普通的服
+			// 务端UDP貌似不太一样，普通UDP时客户端无需先connect可以直接send设置好远程ip和端口的DatagramPackage）
+			ds.connect(getByName(getServerIP()), getServerUDPPort());
+		} catch (Exception e) {
+			Log.w(TAG, "【IMCORE】send时出错，原因是：" + e.getMessage(), e);
+			return BAD_CONNECT_TO_SERVER;
 		}
-		return UDPUtils.send(ds, fullProtocolBytes, dataLen) ? ErrorCode.COMMON_CODE_OK : ErrorCode.COMMON_DATA_SEND_FAILED;
+		return UDPUtils.send(ds, fullProtocolBytes, dataLen) ? COMMON_CODE_OK : COMMON_DATA_SEND_FAILED;
 	}
 
-	public static abstract class SendCommonDataAsync extends AsyncTask<Object, Integer, Integer>
+	static Single<Integer> sendCommonDataAsync(byte[] dataContent, int dataLen, int to_user_id)
 	{
-		protected Context context = null;
-		protected Protocol p = null;
-
-		public SendCommonDataAsync(Context context, byte[] dataContent, int dataLen, int to_user_id)
-		{
-			this(context, CharsetHelper.getString(dataContent, dataLen), to_user_id);
-		}
-
-		public SendCommonDataAsync(Context context, String dataContentWidthStr, int to_user_id, boolean QoS)
-		{
-			this(context, dataContentWidthStr, to_user_id, QoS, null);
-		}
-
-		public SendCommonDataAsync(Context context, String dataContentWidthStr, int to_user_id, boolean QoS, String fingerPrint)
-		{
-			this(context, 
-					ProtocolFactory.createCommonData(dataContentWidthStr,
-							ClientCoreSDK.getInstance().getCurrentUserId(), to_user_id, QoS, fingerPrint));
-		}
-
-		public SendCommonDataAsync(Context context, String dataContentWidthStr, int to_user_id)
-		{
-			this(context, 
-					ProtocolFactory.createCommonData(dataContentWidthStr,
-							ClientCoreSDK.getInstance().getCurrentUserId(), to_user_id));
-		}
-
-		public SendCommonDataAsync(Context context, Protocol p) {
-			if (p == null)
-			{
-				Log.w(LocalUDPDataSender.TAG, "【IMCORE】无效的参数p==null!");
-				return;
-			}
-			this.context = context;
-			this.p = p;
-		}
-
-		protected Integer doInBackground(Object[] params)
-		{
-			if (this.p != null)
-				return LocalUDPDataSender.getInstance(this.context).sendCommonData(this.p);
-			return -1;
-		}
-
-		protected abstract void onPostExecute(Integer paramInteger);
+		return sendCommonDataAsync(getString(dataContent, dataLen), to_user_id);
 	}
 
-	public static abstract class SendLoginDataAsync extends AsyncTask<Object, Integer, Integer>
+	static Single<Integer> sendCommonDataAsync(String dataContentWidthStr, int to_user_id,
+											   boolean QoS)
 	{
-		protected Context context = null;
-		protected String loginName = null;
-		protected String loginPsw = null;
-		protected String extra = null;
+		return sendCommonDataAsync(dataContentWidthStr, to_user_id, QoS, null);
+	}
 
-		public SendLoginDataAsync(Context context, String loginName, String loginPsw)
-		{
-			this(context, loginName, loginPsw, null);
-		}
-		
-		public SendLoginDataAsync(Context context, String loginName, String loginPsw, String extra)
-		{
-			this.context = context;
-			this.loginName = loginName;
-			this.loginPsw = loginPsw;
-			this.extra = extra;
-		}
+	static Single<Integer> sendCommonDataAsync(String dataContentWidthStr, int to_user_id,
+											   boolean QoS, String fingerPrint)
+	{
+		return sendCommonDataAsync(createCommonData
+				(dataContentWidthStr, getCurrentUserId(), to_user_id, QoS, fingerPrint));
+	}
 
-		protected Integer doInBackground(Object[] params)
-		{
-			int code = LocalUDPDataSender.getInstance(this.context)
-					.sendLogin(this.loginName, this.loginPsw, this.extra);
-			return code;
-		}
+	static Single<Integer> sendCommonDataAsync(String dataContentWidthStr, int to_user_id)
+	{
+		return sendCommonDataAsync(createCommonData
+				(dataContentWidthStr, getCurrentUserId(), to_user_id));
+	}
 
-		protected void onPostExecute(Integer code)
-		{
-			if (code!=null && code == 0)
-			{
-				LocalUDPDataReceiver.getInstance(this.context).startup();
-			}
-			else
-			{
-				Log.d(LocalUDPDataSender.TAG, "【IMCORE】数据发送失败, 错误码是：" + code + "！");
-			}
+	static Single<Integer> sendCommonDataAsync(@NonNull Protocol p) {
+		return just(p)
+				.subscribeOn(io())
+				.map(LocalUDPDataSender::sendCommonData)
+				.observeOn(mainThread());
+	}
 
-			fireAfterSendLogin(code==null? 0: code);
-		}
-
-		protected void fireAfterSendLogin(int code)
-		{
-			// default do nothing
+	static void sendReceivedBack(final Protocol pFromServer)
+	{
+		if (pFromServer.getFp() == null) {
+			Log.w(TAG, "【IMCORE】【QoS】收到"+pFromServer.getFrom()
+					 + "发过来需要QoS的包，但它的指纹码却为null！无法发应答包！");
+		} else {
+			just(createReceivedBack
+					(pFromServer.getTo(), pFromServer.getFrom(), pFromServer.getFp()))
+					.subscribeOn(io())
+					.map(LocalUDPDataSender::sendCommonData)
+					.subscribe(code -> {
+						if (ClientCoreSDK.DEBUG)
+							Log.d(TAG, "【IMCORE】【QoS】向"+pFromServer.getFrom() +"发送"+
+									pFromServer.getFp()+"包的应答包成功,from="+pFromServer.getTo()+"！");
+					});
 		}
 	}
 }

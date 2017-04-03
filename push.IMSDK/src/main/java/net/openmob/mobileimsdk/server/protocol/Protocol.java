@@ -6,16 +6,16 @@
  * 即时通讯网(52im.net) - 即时通讯技术社区! PROPRIETARY/CONFIDENTIAL.
  * Use is subject to license terms.
  * 
- * Protocal.java at 2016-2-20 11:26:03, code by Jack Jiang.
+ * Protocol.java at 2016-2-20 11:26:03, code by Jack Jiang.
  * You can contact author with jack.jiang@52im.net or jb2011@163.com.
  */
 package net.openmob.mobileimsdk.server.protocol;
 
-import com.alibaba.fastjson.JSON;
+import static com.alibaba.fastjson.JSON.toJSONString;
+import static java.util.UUID.randomUUID;
+import static net.openmob.mobileimsdk.server.protocol.CharsetHelper.getBytes;
 
-import java.util.UUID;
-
-public class Protocol
+public class Protocol implements Cloneable
 {
 	private int type = 0;
 	private String dataContent = null;
@@ -25,12 +25,12 @@ public class Protocol
 	private boolean QoS = false;
 	private transient int retryCount = 0;
 
-	public Protocol(int type, String dataContent, int from, int to)
+	Protocol(int type, String dataContent, int from, int to)
 	{
 		this(type, dataContent, from, to, false, null);
 	}
 
-	public Protocol(int type, String dataContent, int from, int to, boolean QoS, String fingerPrint)
+	Protocol(int type, String dataContent, int from, int to, boolean QoS, String fingerPrint)
 	{
 		this.type = type;
 		this.dataContent = dataContent;
@@ -51,7 +51,7 @@ public class Protocol
 		return this.type;
 	}
 
-	public void setType(int type)
+	private void setType(int type)
 	{
 		this.type = type;
 	}
@@ -61,7 +61,7 @@ public class Protocol
 		return this.dataContent;
 	}
 
-	public void setDataContent(String dataContent)
+	private void setDataContent(String dataContent)
 	{
 		this.dataContent = dataContent;
 	}
@@ -106,26 +106,33 @@ public class Protocol
 		return this.QoS;
 	}
 
-	public String toGsonString()
-	{
-		return JSON.toJSONString(this);
-	}
-
 	public byte[] toBytes()
 	{
-		return CharsetHelper.getBytes(toGsonString());
+		return getBytes(toJSONString(this));
 	}
 
-	public Object clone()
+	@Override
+	public Protocol clone()
 	{
 		// 克隆一个Protocol对象（该对象已重置retryCount数值为0）
-		Protocol cloneP = new Protocol(getType(),
-				getDataContent(), getFrom(), getTo(), isQoS(), getFp());
+		Protocol cloneP;
+		try {
+			cloneP = (Protocol) super.clone();
+			cloneP.setType(getType());
+			cloneP.setDataContent(getDataContent());
+			cloneP.setFrom(getFrom());
+			cloneP.setTo(getTo());
+			cloneP.QoS = isQoS();
+			cloneP.fp = getFp();
+			cloneP.retryCount = 0;
+		} catch (CloneNotSupportedException e) {
+			cloneP = new Protocol(getType(), getDataContent(), getFrom(), getTo(), isQoS(), getFp());
+		}
 		return cloneP;
 	}
 
-	public static String genFingerPrint()
+	static String genFingerPrint()
 	{
-		return UUID.randomUUID().toString();
+		return randomUUID().toString();
 	}
 }

@@ -11,33 +11,32 @@
  */
 package net.openmob.mobileimsdk.server.protocol.s;
 
+import com.alibaba.fastjson.annotation.JSONCreator;
+import com.alibaba.fastjson.annotation.JSONField;
+
 public class PLoginInfoResponse
 {
 	private int code = 0;
 	private int user_id = -1;
 
-	public PLoginInfoResponse(int code, int user_id)
-	{
+	@JSONCreator
+	public PLoginInfoResponse(
+			@JSONField(name = "code") int code,
+			@JSONField(name = "user_id") int user_id
+	) {
 		this.code = code;
 		this.user_id = user_id;
 	}
 
+	@JSONField
 	public int getCode()
 	{
 		return this.code;
 	}
 
-	public void setCode(int code) {
-		this.code = code;
-	}
-
+	@JSONField
 	public int getUser_id()
 	{
 		return this.user_id;
-	}
-
-	public void setUser_id(int user_id)
-	{
-		this.user_id = user_id;
 	}
 }

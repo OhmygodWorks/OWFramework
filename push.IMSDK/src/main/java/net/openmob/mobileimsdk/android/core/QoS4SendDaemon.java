@@ -11,245 +11,176 @@
  */
 package net.openmob.mobileimsdk.android.core;
 
-import java.util.ArrayList;
-import java.util.concurrent.ConcurrentHashMap;
+import android.util.Log;
 
 import net.openmob.mobileimsdk.android.ClientCoreSDK;
 import net.openmob.mobileimsdk.server.protocol.Protocol;
-import android.content.Context;
-import android.os.AsyncTask;
-import android.os.Handler;
-import android.util.Log;
+
+import org.reactivestreams.Publisher;
+
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+
+import io.reactivex.disposables.Disposable;
+
+import static io.reactivex.Flowable.fromIterable;
+import static io.reactivex.Flowable.interval;
+import static io.reactivex.Maybe.empty;
+import static io.reactivex.Single.just;
+import static io.reactivex.android.schedulers.AndroidSchedulers.mainThread;
+import static io.reactivex.schedulers.Schedulers.computation;
+import static net.openmob.mobileimsdk.android.ClientCoreSDK.getMessageQoSEvent;
+import static net.openmob.mobileimsdk.android.core.LocalUDPDataSender.sendCommonDataAsync;
+import static net.openmob.mobileimsdk.server.protocol.ErrorCode.COMMON_CODE_OK;
 
 public final class QoS4SendDaemon
 {
 	private static final String TAG = QoS4SendDaemon.class.getSimpleName();
 
 	// 并发Hash，因为本类中可能存在不同的线程同时remove或遍历之
-	private ConcurrentHashMap<String, Protocol> sentMessages = new ConcurrentHashMap<>();
+	private static final Map<String, Protocol> sentMessages = new ConcurrentHashMap<>();
 	// 关发Hash，因为本类中可能存在不同的线程同时remove或遍历之
-	private ConcurrentHashMap<String, Long> sendMessagesTimestamp = new ConcurrentHashMap<>();
+	private static final Map<String, Long> sendMessagesTimestamp = new ConcurrentHashMap<>();
 
-	public static final int CHECK_INTERVAL = 5000;
-	public static final int MESSAGES_JUST$NOW_TIME = 3000;
-	public static final int QOS_TRY_COUNT = 3;
+	private static final int CHECK_INTERVAL = 5000;
+	private static final int MESSAGES_JUST$NOW_TIME = 3000;
+	private static final int QOS_TRY_COUNT = 3;
 
-	private Handler handler = null;
-	private Runnable runnable = null;
-	private boolean running = false;
-	private boolean _executing = false;
-	private Context context = null;
+	private static Disposable disposable = empty().subscribe();
+	private static boolean _executing = false;
 
-	private static QoS4SendDaemon instance = null;
+	private QoS4SendDaemon() {}
 
-	public static QoS4SendDaemon getInstance(Context context)
-	{
-		if (instance == null) {
-			instance = new QoS4SendDaemon(context);
+	private static void startExecuting(long ignored) {
+		_executing = true;
+		if (ClientCoreSDK.DEBUG) {
+			Log.d(TAG, "【IMCORE】【QoS】=========== 消息发送质量保证线程运行中"
+					 + ", 当前需要处理的列表长度为" + size() + "...");
 		}
-		return instance;
 	}
 
-	private QoS4SendDaemon(Context context)
-	{
-		this.context = context;
-
-		init();
+	private static void stopExecuting(List<Protocol> lostMessages) {
+		getMessageQoSEvent().messagesLost(lostMessages);
+		_executing = false;
 	}
 
-	private void init()
-	{
-		this.handler = new Handler();
-		this.runnable = new Runnable()
-		{
-			public void run()
-			{
-				// 极端情况下本次循环内可能执行时间超过了时间间隔，此处是防止在前一
-				// 次还没有运行完的情况下又重复执行，从而出现无法预知的错误
-				if (!QoS4SendDaemon.this._executing)
-				{
-					new AsyncTask()
-					{
-						private ArrayList<Protocol> lostMessages = new ArrayList();
-
-						protected ArrayList<Protocol> doInBackground(Object[] params)
-						{
-							QoS4SendDaemon.this._executing = true;
-							try
-							{
-								if (ClientCoreSDK.DEBUG) {
-									Log.d(QoS4SendDaemon.TAG
-											, "【IMCORE】【QoS】=========== 消息发送质量保证线程运行中" +
-													", 当前需要处理的列表长度为" 
-													+ QoS4SendDaemon.this.sentMessages.size() + "...");
-								}
-
-								for (String key : QoS4SendDaemon.this.sentMessages.keySet())
-								{
-									Protocol p = (Protocol)QoS4SendDaemon.this.sentMessages.get(key);
-									if ((p != null) && (p.isQoS()))
-									{
-										if (p.getRetryCount() >= QOS_TRY_COUNT)
-										{
-											if (ClientCoreSDK.DEBUG) {
-												Log.d(QoS4SendDaemon.TAG
-														, "【IMCORE】【QoS】指纹为" + p.getFp() + 
-														"的消息包重传次数已达" + p.getRetryCount() + "(最多" + QOS_TRY_COUNT + "次)上限，将判定为丢包！");
-											}
-
-											this.lostMessages.add((Protocol)p.clone());
-											QoS4SendDaemon.this.remove(p.getFp());
-										}
-										else
-										{
-											long delta = System.currentTimeMillis() - QoS4SendDaemon.this.sendMessagesTimestamp.get(key);
-
-											if (delta <= MESSAGES_JUST$NOW_TIME)
-											{
-												if (ClientCoreSDK.DEBUG) {
-													Log.w(QoS4SendDaemon.TAG, "【IMCORE】【QoS】指纹为"
-															+ key + "的包距\"刚刚\"发出才" + delta 
-															+ "ms(<=" + MESSAGES_JUST$NOW_TIME 
-															+ "ms将被认定是\"刚刚\"), 本次不需要重传哦.");
-												}
-											}
-											else
-											{
-												new LocalUDPDataSender.SendCommonDataAsync(QoS4SendDaemon.this.context, p)
-												{
-													protected void onPostExecute(Integer code)
-													{
-														if (code.intValue() == 0)
-														{
-															this.p.increaseRetryCount();
-
-															if (ClientCoreSDK.DEBUG)
-																Log.d(QoS4SendDaemon.TAG, "【IMCORE】【QoS】指纹为" + this.p.getFp() + 
-																		"的消息包已成功进行重传，此次之后重传次数已达" + 
-																		this.p.getRetryCount() + "(最多" + QOS_TRY_COUNT + "次).");
-														}
-														else
-														{
-															Log.w(QoS4SendDaemon.TAG, "【IMCORE】【QoS】指纹为" + this.p.getFp() + 
-																	"的消息包重传失败，它的重传次数之前已累计为" + 
-																	this.p.getRetryCount() + "(最多" + QOS_TRY_COUNT + "次).");
-														}
-													}
-												}
-												.execute(new Object[0]);
-											}
-										}
-									}
-									else
-									{
-										QoS4SendDaemon.this.remove(key);
-									}
-								}
-							}
-							catch (Exception eee)
-							{
-								Log.w(QoS4SendDaemon.TAG, "【IMCORE】【QoS】消息发送质量保证线程运行时发生异常," + eee.getMessage(), eee);
-							}
-
-							return this.lostMessages;
-						}
-
-						protected void onPostExecute(ArrayList<Protocol> al)
-						{
-							if ((al != null) && (al.size() > 0))
-							{
-								QoS4SendDaemon.this.notifyMessageLost(al);
-							}
-
-							QoS4SendDaemon.this._executing = false;
-							QoS4SendDaemon.this.handler.postDelayed(QoS4SendDaemon.this.runnable, 5000L);
-						}
+	private static boolean lostMessage(Protocol p) {
+		String key = p.getFp();
+		if (!p.isQoS()) {
+			remove(key);
+		}
+		else if (p.getRetryCount() < QOS_TRY_COUNT) {
+			long delta = System.currentTimeMillis() - sendMessagesTimestamp.get(key);
+			//
+			if (delta > MESSAGES_JUST$NOW_TIME) {
+				sendCommonDataAsync(p).subscribe(code -> {
+					if (code == COMMON_CODE_OK) {
+						p.increaseRetryCount();
+						if (ClientCoreSDK.DEBUG)
+							Log.d(TAG, "【IMCORE】【QoS】指纹为" + key +
+									"的消息包已成功进行重传，此次之后重传次数已达" +
+									p.getRetryCount() + "(最多" + QOS_TRY_COUNT + "次).");
+					} else {
+						Log.w(TAG, "【IMCORE】【QoS】指纹为" + key +
+								"的消息包重传失败，它的重传次数之前已累计为" +
+								p.getRetryCount() + "(最多" + QOS_TRY_COUNT + "次).");
 					}
-					.execute();
-				}
+				});
+			} else if (ClientCoreSDK.DEBUG) {
+				Log.w(TAG, "【IMCORE】【QoS】指纹为" + key + "的包距\"刚刚\"发出才" + delta
+						 + "ms(<=" + MESSAGES_JUST$NOW_TIME + "ms将被认定是\"刚刚\"), 本次不需要重传哦.");
 			}
-		};
+		} else {
+			remove(key);
+			if (ClientCoreSDK.DEBUG) {
+				Log.d(TAG, "【IMCORE】【QoS】指纹为" + key + "的消息包重传次数已达"
+						 + p.getRetryCount() + "(最多" + QOS_TRY_COUNT + "次)上限，将判定为丢包！");
+			}
+			return true;
+		}
+		return false;
 	}
 
-	protected void notifyMessageLost(ArrayList<Protocol> lostMessages)
-	{
-		if (ClientCoreSDK.getInstance().getMessageQoSEvent() != null)
-			ClientCoreSDK.getInstance().getMessageQoSEvent().messagesLost(lostMessages);
+	private static Publisher<List<Protocol>> lostMessages(long ignored) {
+		return fromIterable(sentMessages.keySet())
+				.map(sentMessages::get)
+				.filter(QoS4SendDaemon::lostMessage)
+				.map(Protocol::clone)
+				.toList().toFlowable();
 	}
 
-	public void startup(boolean immediately)
+	static synchronized void startup(boolean immediately)
 	{
 		stop();
-
-		this.handler.postDelayed(this.runnable, immediately ? 0 : CHECK_INTERVAL);
-		this.running = true;
+		disposable = interval(immediately ? 0 : CHECK_INTERVAL,
+				CHECK_INTERVAL, TimeUnit.MILLISECONDS, computation())
+				.filter(now -> !_executing)
+				.doOnNext(QoS4SendDaemon::startExecuting)
+				.flatMap(QoS4SendDaemon::lostMessages)
+				.observeOn(mainThread())
+				.doOnNext(QoS4SendDaemon::stopExecuting)
+				.subscribe();
 	}
 
-	public void stop()
+	public static synchronized void stop()
 	{
-		this.handler.removeCallbacks(this.runnable);
-		this.running = false;
+		disposable.dispose();
 	}
 
-	public boolean isRunning()
+	public static boolean isRunning()
 	{
-		return this.running;
+		return !disposable.isDisposed();
 	}
 
-	boolean exist(String fingerPrint)
+	static boolean exist(String fingerPrint)
 	{
-		return this.sentMessages.get(fingerPrint) != null;
+		return sentMessages.get(fingerPrint) != null;
 	}
 
-	public void put(Protocol p)
+	static void put(Protocol p)
 	{
 		if (p == null)
 		{
 			Log.w(TAG, "Invalid arg p==null.");
 			return;
 		}
-		if (p.getFp() == null)
+		if (!p.isQoS())
+		{
+			Log.w(TAG, "This protocol is not QoS pkg, ignore it!");
+			return;
+		}
+		String fp = p.getFp();
+		if (fp == null)
 		{
 			Log.w(TAG, "Invalid arg p.getFp() == null.");
 			return;
 		}
-
-		if (!p.isQoS())
-		{
-			Log.w(TAG, "This protocal is not QoS pkg, ignore it!");
-			return;
+		if (sentMessages.get(fp) != null) {
+			Log.w(TAG, "【IMCORE】【QoS】指纹为" + fp + "的消息已经放入了发送质量保证队列，"
+					 + "该消息为何会重复？（生成的指纹码重复？还是重复put？）");
 		}
-
-		if (this.sentMessages.get(p.getFp()) != null) {
-			Log.w(TAG, "【IMCORE】【QoS】指纹为" + p.getFp() + "的消息已经放入了发送质量保证队列，该消息为何会重复？（生成的指纹码重复？还是重复put？）");
-		}
-
 		// save it
-		sentMessages.put(p.getFp(), p);
+		sentMessages.put(fp, p);
 		// 同时保存时间戳
-		sendMessagesTimestamp.put(p.getFp(), System.currentTimeMillis());
+		sendMessagesTimestamp.put(fp, System.currentTimeMillis());
 	}
 
-	public void remove(final String fingerPrint)
+	static void remove(final String fingerPrint)
 	{
-		new AsyncTask(){
-			@Override
-			protected Object doInBackground(Object... params)
-			{
-				sendMessagesTimestamp.remove(fingerPrint);
-				return sentMessages.remove(fingerPrint);
-			}
-
-			protected void onPostExecute(Object result) 
-			{
-				Log.w(TAG, "【IMCORE】【QoS】指纹为"+fingerPrint+"的消息已成功从发送质量保证队列中移除(可能是收到接收方的应答也可能是达到了重传的次数上限)，重试次数="
-						+(result != null?((Protocol)result).getRetryCount():"none呵呵."));
-			}
-		}.execute();
+		just(fingerPrint)
+				.subscribeOn(computation())
+				.doOnSuccess(sendMessagesTimestamp::remove)
+				.map(sentMessages::remove)
+				.subscribe(result -> Log.w(TAG, "【IMCORE】【QoS】指纹为" + fingerPrint +
+						"的消息已成功从发送质量保证队列中移除" +
+						"(可能是收到接收方的应答也可能是达到了重传的次数上限)，重试次数=" +
+						(result != null?result.getRetryCount():"none 呵呵.")));
 	}
 
-	public int size()
+	private static int size()
 	{
-		return this.sentMessages.size();
+		return sentMessages.size();
 	}
 }

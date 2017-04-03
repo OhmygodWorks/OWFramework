@@ -11,141 +11,136 @@
  */
 package net.openmob.mobileimsdk.android.core;
 
-import android.content.Context;
 import android.os.AsyncTask;
 import android.os.Handler;
+import android.support.annotation.NonNull;
+import android.support.annotation.WorkerThread;
 import android.util.Log;
 
-import net.openmob.mobileimsdk.android.ClientCoreSDK;
+import net.openmob.mobileimsdk.android.conf.ConfigEntity;
+import net.openmob.mobileimsdk.android.conf.ConfigEntity.SenseMode;
 
 import java.util.Observer;
 
+import static net.openmob.mobileimsdk.android.ClientCoreSDK.DEBUG;
+
+/**
+ * 后台线程不断发心跳消息。
+ */
 public final class KeepAliveDaemon
 {
 	private static final String TAG = KeepAliveDaemon.class.getSimpleName();
+	private static final Observer dummyObserver = (o, arg) -> Log.d(TAG, "lost network connection");
 
+	/**
+	 * 限制只能通过{@link ConfigEntity#setSenseMode(SenseMode)}来更改，不要手动改
+	 * @hide
+	 */
 	public static int NETWORK_CONNECTION_TIME_OUT = 10000;
-
+	/**
+	 * 限制只能通过{@link ConfigEntity#setSenseMode(SenseMode)}来更改，不要手动改
+	 * @hide
+	 */
 	public static int KEEP_ALIVE_INTERVAL = 3000;
 
-	private Handler handler = null;
-	private Runnable runnable = null;
-	private boolean keepAliveRunning = false;
-	private long lastGetKeepAliveResponseFromServerTimestamp = 0L;
-
-	private Observer networkConnectionLostObserver = null;
-	private boolean _executing = false;
-	private Context context = null;
-
-	private static KeepAliveDaemon instance = null;
-	
-	public static KeepAliveDaemon getInstance(Context context)
+	private static Handler handler = new Handler();
+	private static Runnable runnable =  new Runnable()
 	{
-		if (instance == null)
-			instance = new KeepAliveDaemon(context);
-		return instance;
-	}
-
-	private KeepAliveDaemon(Context context)
-	{
-		this.context = context;
-		init();
-	}
-
-	private void init()
-	{
-		this.handler = new Handler();
-		this.runnable = new Runnable()
+		public void run()
 		{
-			public void run()
-			{
-				// 极端情况下本次循环内可能执行时间超过了时间间隔，此处是防止在前一
-				// 次还没有运行完的情况下又重复过劲行，从而出现无法预知的错误
-				if (!KeepAliveDaemon.this._executing)
-				{
-					new AsyncTask<Object, Integer, Integer>()
-					{
-						private boolean willStop = false;
-
-						protected Integer doInBackground(Object[] params)
-						{
-							KeepAliveDaemon.this._executing = true;
-							if (ClientCoreSDK.DEBUG)
-								Log.d(KeepAliveDaemon.TAG, "【IMCORE】心跳线程执行中...");
-							int code = LocalUDPDataSender.getInstance(KeepAliveDaemon.this.context).sendKeepAlive();
-
-							return code;
-						}
-
-						protected void onPostExecute(Integer code)
-						{
-							boolean isInitialedForKeepAlive = 
-									KeepAliveDaemon.this.lastGetKeepAliveResponseFromServerTimestamp == 0L;
-							if ((code == 0) &&
-								(KeepAliveDaemon.this.lastGetKeepAliveResponseFromServerTimestamp == 0L)) {
-								KeepAliveDaemon.this.lastGetKeepAliveResponseFromServerTimestamp = System.currentTimeMillis();
-							}
-
-							if (!isInitialedForKeepAlive)
-							{
-								long now = System.currentTimeMillis();
-
-								// 当当前时间与最近一次服务端的心跳响应包时间间隔>= 10秒就判定当前与服务端的网络连接已断开
-								if (now - KeepAliveDaemon.this.lastGetKeepAliveResponseFromServerTimestamp
-										>= KeepAliveDaemon.NETWORK_CONNECTION_TIME_OUT)
-								{
-									KeepAliveDaemon.this.stop();
-
-									if (KeepAliveDaemon.this.networkConnectionLostObserver != null) {
-										KeepAliveDaemon.this.networkConnectionLostObserver.update(null, null);
-									}
-									this.willStop = true;
-								}
-							}
-
-							KeepAliveDaemon.this._executing = false;
-							if (!this.willStop)
-							{
-								// 开始下一个心跳循环
-								KeepAliveDaemon.this.handler.postDelayed(
-										KeepAliveDaemon.this.runnable
-										, KeepAliveDaemon.KEEP_ALIVE_INTERVAL);
-							}
-						}
-					}
-					.execute();
-				}
+			// 极端情况下本次循环内可能执行时间超过了时间间隔，此处是防止在前一
+			// 次还没有运行完的情况下又重复过劲行，从而出现无法预知的错误
+			if (_executing) {
+				return;
 			}
-		};
+			new AsyncTask<Object, Integer, Integer>()
+			{
+				private boolean willStop = false;
+
+				protected Integer doInBackground(Object[] params)
+				{
+					return bgKeepAlive();
+				}
+
+				protected void onPostExecute(Integer code)
+				{
+					willStop = fgKeepAliveResult(code, willStop);
+				}
+			}.execute();
+		}
+	};
+	private static boolean keepAliveRunning = false;
+	private static long lastGetKeepAliveResponseFromServerTimestamp = 0L;
+	@NonNull
+	private static Observer networkConnectionLostObserver = dummyObserver;
+	private static boolean _executing = false;
+
+	private KeepAliveDaemon() {}
+
+	@WorkerThread
+	private static int bgKeepAlive() {
+		_executing = true;
+		if (DEBUG) Log.d(TAG, "【IMCORE】心跳线程执行中...");
+		return LocalUDPDataSender.sendKeepAlive();
 	}
 
-	public void stop()
+	private static boolean fgKeepAliveResult(int code, boolean willStop)
 	{
-		this.handler.removeCallbacks(this.runnable);
-		this.keepAliveRunning = false;
-		this.lastGetKeepAliveResponseFromServerTimestamp = 0L;
+		boolean isInitialedForKeepAlive =
+				lastGetKeepAliveResponseFromServerTimestamp == 0L;
+		if (code == 0 && isInitialedForKeepAlive) {
+			updateGetKeepAliveResponseFromServerTimestamp();
+		}
+		if (!isInitialedForKeepAlive)
+		{
+			long now = System.currentTimeMillis();
+			// 当当前时间与最近一次服务端的心跳响应包时间间隔>= 10秒就判定当前与服务端的网络连接已断开
+			if (now - lastGetKeepAliveResponseFromServerTimestamp
+					>= NETWORK_CONNECTION_TIME_OUT)
+			{
+				stop();
+				networkConnectionLostObserver.update(null, null);
+				willStop = true;
+			}
+		}
+		_executing = false;
+		if (!willStop)
+		{
+			// 开始下一个心跳循环
+			handler.postDelayed(runnable, KEEP_ALIVE_INTERVAL);
+		}
+		return willStop;
 	}
 
-	public void start(boolean immediately)
+	public static void stop()
+	{
+		handler.removeCallbacks(runnable);
+		keepAliveRunning = false;
+		lastGetKeepAliveResponseFromServerTimestamp = 0L;
+	}
+
+	static void start(boolean immediately)
 	{
 		stop();
-
-		this.handler.postDelayed(this.runnable, immediately ? 0 : KEEP_ALIVE_INTERVAL);
-		this.keepAliveRunning = true;
+		handler.postDelayed(runnable, immediately ? 0 : KEEP_ALIVE_INTERVAL);
+		keepAliveRunning = true;
 	}
 
-	public boolean isKeepAliveRunning()
+	public static boolean isKeepAliveRunning()
 	{
-		return this.keepAliveRunning;
+		return keepAliveRunning;
 	}
 
-	public void updateGetKeepAliveResponseFromServerTimestamp()
+	static void updateGetKeepAliveResponseFromServerTimestamp()
 	{
-		this.lastGetKeepAliveResponseFromServerTimestamp = System.currentTimeMillis();
+		lastGetKeepAliveResponseFromServerTimestamp = System.currentTimeMillis();
 	}
 
-	public void setNetworkConnectionLostObserver(Observer networkConnectionLostObserver)
-	{
-		this.networkConnectionLostObserver = networkConnectionLostObserver;
+	static void setNetworkConnectionLostObserver(
+			@SuppressWarnings("NullableProblems") Observer networkConnectionLostObserver
+	) {
+		//noinspection ConstantConditions
+		KeepAliveDaemon.networkConnectionLostObserver =
+				(networkConnectionLostObserver==null?dummyObserver:networkConnectionLostObserver);
 	}
 }

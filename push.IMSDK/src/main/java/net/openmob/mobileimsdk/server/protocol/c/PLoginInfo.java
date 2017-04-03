@@ -11,51 +11,41 @@
  */
 package net.openmob.mobileimsdk.server.protocol.c;
 
+import com.alibaba.fastjson.annotation.JSONCreator;
+import com.alibaba.fastjson.annotation.JSONField;
+
 public class PLoginInfo
 {
 	private String loginName = null;
 	private String loginPsw = null;
 	private String extra = null;
 
-	public PLoginInfo(String loginName, String loginPsw)
-	{
-		this(loginName, loginPsw, null);
-	}
-	
-	public PLoginInfo(String loginName, String loginPsw, String extra)
-	{
+	@JSONCreator
+	public PLoginInfo(
+			@JSONField(name = "loginName") String loginName,
+			@JSONField(name = "loginPsw") String loginPsw,
+			@JSONField(name = "extra") String extra
+	) {
 		this.loginName = loginName;
 		this.loginPsw = loginPsw;
 		this.extra = extra;
 	}
 
+	@JSONField
 	public String getLoginName()
 	{
 		return this.loginName;
 	}
 
-	public void setLoginName(String loginName)
-	{
-		this.loginName = loginName;
-	}
-
+	@JSONField
 	public String getLoginPsw()
 	{
 		return this.loginPsw;
 	}
 
-	public void setLoginPsw(String loginPsw)
-	{
-		this.loginPsw = loginPsw;
-	}
-	
+	@JSONField
 	public String getExtra()
 	{
 		return extra;
-	}
-	
-	public void setExtra(String extra)
-	{
-		this.extra = extra;
 	}
 }

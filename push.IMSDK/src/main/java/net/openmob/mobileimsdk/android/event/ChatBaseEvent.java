@@ -11,9 +11,39 @@
  */
 package net.openmob.mobileimsdk.android.event;
 
-public interface ChatBaseEvent
-{
-  void onLoginMessage(int paramInt1, int paramInt2);
+import android.util.Log;
 
-  void onLinkCloseMessage(int paramInt);
+import net.openmob.mobileimsdk.server.protocol.ErrorCode;
+
+import static net.openmob.mobileimsdk.android.ClientCoreSDK.DEBUG;
+
+public interface ChatBaseEvent {
+    /**
+     * 通知登录结果的回调
+     *
+     * @param userID    服务端返回的用户ID
+     * @param errorCode 服务端返回的错误码。@see{@link ErrorCode}
+     */
+    void onLoginMessage(int userID, int errorCode);
+
+    /**
+     * 通知网络连接断开的回调
+     *
+     * @param code 错误码
+     */
+    void onLinkCloseMessage(int code);
+
+    /**
+     * 简化实现
+     */
+    abstract class SimpleChatBaseEvent implements ChatBaseEvent {
+        @Override
+        public void onLoginMessage(int userID, int errorCode) {
+            if (DEBUG) Log.i("", "onLoginMessage" + " userID:" + userID + " code:" + errorCode);
+        }
+        @Override
+        public void onLinkCloseMessage(int code) {
+            if (DEBUG) Log.i("", "onLinkCloseMessage" + " code:" + code);
+        }
+    }
 }

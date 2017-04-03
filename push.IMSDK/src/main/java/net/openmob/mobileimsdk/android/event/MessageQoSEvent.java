@@ -11,13 +11,40 @@
  */
 package net.openmob.mobileimsdk.android.event;
 
+import android.util.Log;
+
 import net.openmob.mobileimsdk.server.protocol.Protocol;
 
-import java.util.ArrayList;
+import java.util.Collection;
 
-public interface MessageQoSEvent
-{
-  void messagesLost(ArrayList<Protocol> paramArrayList);
+import static net.openmob.mobileimsdk.android.ClientCoreSDK.DEBUG;
 
-  void messagesBeReceived(String paramString);
+public interface MessageQoSEvent {
+    /**
+     * 有消息没发送成功的时候的回调
+     *
+     * @param lostMessages 没发送成功的消息
+     */
+    void messagesLost(Collection<Protocol> lostMessages);
+
+    /**
+     * 确认指定消息已送达服务器的时候的回调
+     *
+     * @param messageFingerPrint 已送达的消息的指纹，相当于消息的ID
+     */
+    void messagesBeReceived(String messageFingerPrint);
+
+    /**
+     * 简化实现
+     */
+    abstract class SimpleMessageQoSEvent implements MessageQoSEvent {
+        @Override
+        public void messagesLost(Collection<Protocol> lostMessages) {
+            if (DEBUG) Log.w("", "messagesLost" + lostMessages);
+        }
+        @Override
+        public void messagesBeReceived(String messageFingerPrint) {
+            if (DEBUG) Log.d("", "messagesBeReceived" + " id:" + messageFingerPrint);
+        }
+    }
 }

@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="ow.framework">
 
-    <application android:name="ow.android.app.Application" android:hasCode="true"/>
+    <application
+        android:name="ow.android.app.Application"
+        android:hasCode="true"/>
 
 </manifest>
