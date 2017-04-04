@@ -20,6 +20,7 @@ import android.util.Log;
 import net.openmob.mobileimsdk.android.conf.ConfigEntity;
 import net.openmob.mobileimsdk.android.conf.ConfigEntity.SenseMode;
 
+import java.util.Observable;
 import java.util.Observer;
 
 import static net.openmob.mobileimsdk.android.ClientCoreSDK.DEBUG;
@@ -30,7 +31,12 @@ import static net.openmob.mobileimsdk.android.ClientCoreSDK.DEBUG;
 public final class KeepAliveDaemon
 {
 	private static final String TAG = KeepAliveDaemon.class.getSimpleName();
-	private static final Observer dummyObserver = (o, arg) -> Log.d(TAG, "lost network connection");
+	private static final Observer dummyObserver = new Observer() {
+		@Override
+		public void update(Observable o, Object arg) {
+			Log.d(TAG, "lost network connection");
+		}
+	};
 
 	/**
 	 * 限制只能通过{@link ConfigEntity#setSenseMode(SenseMode)}来更改，不要手动改

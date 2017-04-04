@@ -24,6 +24,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 import io.reactivex.disposables.Disposable;
+import io.reactivex.functions.Consumer;
+import io.reactivex.functions.Function;
+import io.reactivex.functions.Predicate;
 
 import static io.reactivex.Flowable.fromIterable;
 import static io.reactivex.Flowable.interval;
@@ -53,7 +56,7 @@ public final class QoS4SendDaemon
 
 	private QoS4SendDaemon() {}
 
-	private static void startExecuting(long ignored) {
+	private static void startExecuting() {
 		_executing = true;
 		if (ClientCoreSDK.DEBUG) {
 			Log.d(TAG, "【IMCORE】【QoS】=========== 消息发送质量保证线程运行中"
@@ -66,8 +69,8 @@ public final class QoS4SendDaemon
 		_executing = false;
 	}
 
-	private static boolean lostMessage(Protocol p) {
-		String key = p.getFp();
+	private static boolean lostMessage(final Protocol p) {
+		final String key = p.getFp();
 		if (!p.isQoS()) {
 			remove(key);
 		}
@@ -75,17 +78,20 @@ public final class QoS4SendDaemon
 			long delta = System.currentTimeMillis() - sendMessagesTimestamp.get(key);
 			//
 			if (delta > MESSAGES_JUST$NOW_TIME) {
-				sendCommonDataAsync(p).subscribe(code -> {
-					if (code == COMMON_CODE_OK) {
-						p.increaseRetryCount();
-						if (ClientCoreSDK.DEBUG)
-							Log.d(TAG, "【IMCORE】【QoS】指纹为" + key +
-									"的消息包已成功进行重传，此次之后重传次数已达" +
+				sendCommonDataAsync(p).subscribe(new Consumer<Integer>() {
+					@Override
+					public void accept(Integer code) throws Exception {
+						if (code == COMMON_CODE_OK) {
+							p.increaseRetryCount();
+							if (ClientCoreSDK.DEBUG)
+								Log.d(TAG, "【IMCORE】【QoS】指纹为" + key +
+										"的消息包已成功进行重传，此次之后重传次数已达" +
+										p.getRetryCount() + "(最多" + QOS_TRY_COUNT + "次).");
+						} else {
+							Log.w(TAG, "【IMCORE】【QoS】指纹为" + key +
+									"的消息包重传失败，它的重传次数之前已累计为" +
 									p.getRetryCount() + "(最多" + QOS_TRY_COUNT + "次).");
-					} else {
-						Log.w(TAG, "【IMCORE】【QoS】指纹为" + key +
-								"的消息包重传失败，它的重传次数之前已累计为" +
-								p.getRetryCount() + "(最多" + QOS_TRY_COUNT + "次).");
+						}
 					}
 				});
 			} else if (ClientCoreSDK.DEBUG) {
@@ -103,24 +109,69 @@ public final class QoS4SendDaemon
 		return false;
 	}
 
-	private static Publisher<List<Protocol>> lostMessages(long ignored) {
+	private static final Function<String, Protocol> sentMessages_get = new Function<String, Protocol>() {
+		@Override
+		public Protocol apply(String key) throws Exception {
+			return sentMessages.get(key);
+		}
+	};
+	private static final Predicate<Protocol> lostMessage = new Predicate<Protocol>() {
+		@Override
+		public boolean test(Protocol p) throws Exception {
+			return lostMessage(p);
+		}
+	};
+	private static final Function<Protocol, Protocol> protocol_clone = new Function<Protocol, Protocol>() {
+		@Override
+		public Protocol apply(Protocol protocol) throws Exception {
+			return protocol.clone();
+		}
+	};
+
+	private static Publisher<List<Protocol>> lostMessages() {
 		return fromIterable(sentMessages.keySet())
-				.map(sentMessages::get)
-				.filter(QoS4SendDaemon::lostMessage)
-				.map(Protocol::clone)
+				.map(sentMessages_get)
+				.filter(lostMessage)
+				.map(protocol_clone)
 				.toList().toFlowable();
 	}
+
+	private static final Predicate<Long> not_executing = new Predicate<Long>() {
+		@Override
+		public boolean test(Long now) throws Exception {
+			return !_executing;
+		}
+	};
+	private static final Consumer<Long> startExecuting = new Consumer<Long>() {
+		@Override
+		public void accept(Long ignored) throws Exception {
+			startExecuting();
+		}
+	};
+	private static final Function<Long, Publisher<List<Protocol>>> lostMessages
+			= new Function<Long, Publisher<List<Protocol>>>() {
+		@Override
+		public Publisher<List<Protocol>> apply(Long ignored) throws Exception {
+			return lostMessages();
+		}
+	};
+	private static final Consumer<List<Protocol>> stopExecuting = new Consumer<List<Protocol>>() {
+		@Override
+		public void accept(List<Protocol> lostMessages) throws Exception {
+			stopExecuting(lostMessages);
+		}
+	};
 
 	static synchronized void startup(boolean immediately)
 	{
 		stop();
 		disposable = interval(immediately ? 0 : CHECK_INTERVAL,
 				CHECK_INTERVAL, TimeUnit.MILLISECONDS, computation())
-				.filter(now -> !_executing)
-				.doOnNext(QoS4SendDaemon::startExecuting)
-				.flatMap(QoS4SendDaemon::lostMessages)
+				.filter(not_executing)
+				.doOnNext(startExecuting)
+				.flatMap(lostMessages)
 				.observeOn(mainThread())
-				.doOnNext(QoS4SendDaemon::stopExecuting)
+				.doOnNext(stopExecuting)
 				.subscribe();
 	}
 
@@ -171,13 +222,31 @@ public final class QoS4SendDaemon
 	{
 		just(fingerPrint)
 				.subscribeOn(computation())
-				.doOnSuccess(sendMessagesTimestamp::remove)
-				.map(sentMessages::remove)
-				.subscribe(result -> Log.w(TAG, "【IMCORE】【QoS】指纹为" + fingerPrint +
-						"的消息已成功从发送质量保证队列中移除" +
-						"(可能是收到接收方的应答也可能是达到了重传的次数上限)，重试次数=" +
-						(result != null?result.getRetryCount():"none 呵呵.")));
+				.doOnSuccess(sendMessagesTimestamp_remove)
+				.map(sentMessages_remove)
+				.subscribe(logOutResult);
 	}
+	private static final Consumer<String> sendMessagesTimestamp_remove = new Consumer<String>() {
+		@Override
+		public void accept(String key) throws Exception {
+			sendMessagesTimestamp.remove(key);
+		}
+	};
+	private static final Function<String, Protocol> sentMessages_remove = new Function<String, Protocol>() {
+		@Override
+		public Protocol apply(String key) throws Exception {
+			return sentMessages.remove(key);
+		}
+	};
+	private static final Consumer<Protocol> logOutResult = new Consumer<Protocol>() {
+		@Override
+		public void accept(Protocol result) throws Exception {
+			Log.w(TAG, "【IMCORE】【QoS】指纹为" + (result != null ? result.getFp() : "null") +
+					"的消息已成功从发送质量保证队列中移除" +
+					"(可能是收到接收方的应答也可能是达到了重传的次数上限)，重试次数=" +
+					(result != null ? result.getRetryCount() : "none 呵呵."));
+		}
+	};
 
 	private static int size()
 	{

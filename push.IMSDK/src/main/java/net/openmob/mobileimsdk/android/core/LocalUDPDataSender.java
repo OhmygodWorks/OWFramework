@@ -24,6 +24,10 @@ import java.net.DatagramSocket;
 import io.reactivex.Maybe;
 import io.reactivex.Single;
 import io.reactivex.disposables.Disposable;
+import io.reactivex.functions.Action;
+import io.reactivex.functions.Consumer;
+import io.reactivex.functions.Function;
+import io.reactivex.functions.Predicate;
 
 import static android.text.TextUtils.isEmpty;
 import static io.reactivex.Single.just;
@@ -61,22 +65,29 @@ public final class LocalUDPDataSender
 
 	private LocalUDPDataSender() {}
 
-	public static Disposable login(String loginName, String loginPsw, String extra) {
+	public static Disposable login(final String loginName, final String loginPsw, final String extra) {
 		return just(extra)
 				.subscribeOn(io())
-				.map(s -> sendLogin(loginName, loginPsw, extra))
+				.map(new Function<String, Integer>() {
+					@Override
+					public Integer apply(String s) throws Exception {
+						return sendLogin(loginName, loginPsw, extra);
+					}
+				})
 				.observeOn(mainThread())
-				.subscribe(code -> {
-					if (code!=null && code == COMMON_CODE_OK)
-					{
-						LocalUDPDataReceiver.startup();
-					}
-					else
-					{
-						Log.d(TAG, "【IMCORE】数据发送失败, 错误码是：" + code + "！");
-					}
-				});
+				.subscribe(startup);
 	}
+
+	private static final Consumer<Integer> startup = new Consumer<Integer>() {
+		@Override
+		public void accept(Integer code) throws Exception {
+			if (code != null && code == COMMON_CODE_OK) {
+				LocalUDPDataReceiver.startup();
+			} else {
+				Log.d(TAG, "【IMCORE】数据发送失败, 错误码是：" + code + "！");
+			}
+		}
+	};
 
 	@WorkerThread
 	static int sendLogin(String loginName, String loginPsw, String extra)
@@ -93,26 +104,48 @@ public final class LocalUDPDataSender
 		return code;
 	}
 
+	private static final Predicate<Integer> isLoginHasInit = new Predicate<Integer>() {
+		@Override
+		public boolean test(Integer i) throws Exception {
+			return isLoginHasInit();
+		}
+	};
+	private static final Function<Integer, Integer> send = new Function<Integer, Integer>() {
+		@Override
+		public Integer apply(Integer id) throws Exception {
+			Protocol protocol = createPLogoutInfo(id, getCurrentLoginName());
+			byte[] b = protocol.toBytes();
+			return send(b, b.length);
+		}
+	};
+	private static final Consumer<Integer> release = new Consumer<Integer>() {
+		@Override
+		public void accept(Integer code) throws Exception {
+			// 登出信息成功发出时
+			if (code == COMMON_CODE_OK) {
+//				// 发出退出登陆的消息同时也关闭心跳线程
+//				KeepAliveDaemon.getInstance(context).stop();
+//				// 重置登陆标识
+//				ClientCoreSDK.setLoginHasInit(false);
+			}
+			ClientCoreSDK.release();
+		}
+	};
+	private static final Action SDK_release = new Action() {
+		@Override
+		public void run() throws Exception {
+			ClientCoreSDK.release();
+		}
+	};
+
 	public static Maybe<Integer> logout() {
 		return just(getCurrentUserId())
 				.subscribeOn(io())
-				.filter(i -> isLoginHasInit())
-				.map(id -> createPLogoutInfo(id, getCurrentLoginName()))
-				.map(Protocol::toBytes)
-				.map(b -> send(b, b.length))
+				.filter(isLoginHasInit)
+				.map(send)
 				.observeOn(mainThread())
-				.doOnSuccess(code -> {
-					// 登出信息成功发出时
-					if(code == COMMON_CODE_OK)
-					{
-//						// 发出退出登陆的消息同时也关闭心跳线程
-//						KeepAliveDaemon.getInstance(context).stop();
-//						// 重置登陆标识
-//						ClientCoreSDK.setLoginHasInit(false);
-					}
-				})
-				.doAfterSuccess(code -> ClientCoreSDK.release())
-				.doOnComplete(ClientCoreSDK::release);
+				.doOnSuccess(release)
+				.doOnComplete(SDK_release);
 	}
 
 	@WorkerThread
@@ -194,9 +227,16 @@ public final class LocalUDPDataSender
 	static Single<Integer> sendCommonDataAsync(@NonNull Protocol p) {
 		return just(p)
 				.subscribeOn(io())
-				.map(LocalUDPDataSender::sendCommonData)
+				.map(sendCommonData)
 				.observeOn(mainThread());
 	}
+
+	private static final Function<Protocol, Integer> sendCommonData = new Function<Protocol, Integer>() {
+		@Override
+		public Integer apply(Protocol protocol) throws Exception {
+			return sendCommonData(protocol);
+		}
+	};
 
 	static void sendReceivedBack(final Protocol pFromServer)
 	{
@@ -207,11 +247,14 @@ public final class LocalUDPDataSender
 			just(createReceivedBack
 					(pFromServer.getTo(), pFromServer.getFrom(), pFromServer.getFp()))
 					.subscribeOn(io())
-					.map(LocalUDPDataSender::sendCommonData)
-					.subscribe(code -> {
-						if (ClientCoreSDK.DEBUG)
-							Log.d(TAG, "【IMCORE】【QoS】向"+pFromServer.getFrom() +"发送"+
-									pFromServer.getFp()+"包的应答包成功,from="+pFromServer.getTo()+"！");
+					.map(sendCommonData)
+					.subscribe(new Consumer<Integer>() {
+						@Override
+						public void accept(Integer code) throws Exception {
+							if (ClientCoreSDK.DEBUG)
+								Log.d(TAG, "【IMCORE】【QoS】向" + pFromServer.getFrom() + "发送" +
+										pFromServer.getFp() + "包的应答包成功,from=" + pFromServer.getTo() + "！");
+						}
 					});
 		}
 	}

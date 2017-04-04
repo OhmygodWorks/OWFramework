@@ -12,6 +12,7 @@
 package net.openmob.mobileimsdk.android.core;
 
 import android.os.Handler;
+import android.os.Handler.Callback;
 import android.os.HandlerThread;
 import android.os.Message;
 import android.support.annotation.NonNull;
@@ -27,6 +28,8 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.util.ArrayDeque;
 import java.util.Arrays;
+import java.util.Observable;
+import java.util.Observer;
 import java.util.Queue;
 
 import static net.openmob.mobileimsdk.android.ClientCoreSDK.DEBUG;
@@ -86,6 +89,19 @@ public final class LocalUDPDataReceiver
 		}
 	}
 
+	private static final Runnable p2pListening = new Runnable() {
+		@Override
+		public void run() {
+			p2pListening();
+		}
+	};
+	private static final Callback handleMessage = new Callback() {
+		@Override
+		public boolean handleMessage(Message msg) {
+			return LocalUDPDataReceiver.handleMessage(msg);
+		}
+	};
+
 	static synchronized void startup()
 	{
 		stop();
@@ -93,9 +109,9 @@ public final class LocalUDPDataReceiver
 		{
 			handlerThread = new HandlerThread(TAG);
 			handlerThread.start();
-			listeningThread = new Thread(LocalUDPDataReceiver::p2pListening);
+			listeningThread = new Thread(p2pListening);
 			listeningThread.start();
-			messageHandler = new Handler(handlerThread.getLooper(), LocalUDPDataReceiver::handleMessage);
+			messageHandler = new Handler(handlerThread.getLooper(), handleMessage);
 		}
 		catch (Exception e)
 		{
@@ -181,6 +197,18 @@ public final class LocalUDPDataReceiver
 		return hasReceived;
 	}
 
+	private static final Observer restart = new Observer() {
+		@Override
+		public void update(Observable observable, Object data) {
+			QoS4SendDaemon.stop();
+			QoS4ReceiveDaemon.stop();
+			setConnectedToServer(false);
+			setCurrentUserId(-1);
+			getChatBaseEvent().onLinkCloseMessage(-1);
+			AutoReLoginDaemon.start(true);
+		}
+	};
+
 	@WorkerThread
 	private static void onLoginResponse(PLoginInfoResponse loginInfoRes) {
 		if (loginInfoRes.getCode() == COMMON_CODE_OK)
@@ -188,14 +216,7 @@ public final class LocalUDPDataReceiver
 			setLoginHasInit(true);
 			setCurrentUserId(loginInfoRes.getUser_id());
 			AutoReLoginDaemon.stop();
-			setNetworkConnectionLostObserver((observable, data) -> {
-				QoS4SendDaemon.stop();
-				QoS4ReceiveDaemon.stop();
-				setConnectedToServer(false);
-				setCurrentUserId(-1);
-				getChatBaseEvent().onLinkCloseMessage(-1);
-				AutoReLoginDaemon.start(true);
-			});
+			setNetworkConnectionLostObserver(restart);
 			KeepAliveDaemon.start(false);
 			QoS4SendDaemon.startup(true);
 			QoS4ReceiveDaemon.startup(true);

@@ -17,6 +17,7 @@ import android.util.Log;
 import net.openmob.mobileimsdk.android.ClientCoreSDK;
 import net.openmob.mobileimsdk.server.protocol.Protocol;
 
+import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscription;
 
 import java.util.Map;
@@ -25,6 +26,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import io.reactivex.Flowable;
 import io.reactivex.Maybe;
 import io.reactivex.disposables.Disposable;
+import io.reactivex.functions.Action;
+import io.reactivex.functions.Consumer;
+import io.reactivex.functions.Function;
+import io.reactivex.functions.Predicate;
 
 import static io.reactivex.Flowable.fromIterable;
 import static io.reactivex.Flowable.interval;
@@ -50,20 +55,58 @@ public final class QoS4ReceiveDaemon
 				CHECK_INTERVAL, MILLISECONDS, computation())
 				// 极端情况下本次循环内可能执行时间超过了时间间隔，此处是防止在前一
 				// 次还没有运行完的情况下又重复过劲行，从而出现无法预知的错误
-				.filter(now -> !_executing)
-				.flatMap(QoS4ReceiveDaemon::checkImpl)
+				.filter(not_executing)
+				.flatMap(checkImpl)
 				.subscribe();
 	}
 
-	private static Flowable<String> checkImpl(long ignore) {
+	private static final Predicate<Long> not_executing = new Predicate<Long>() {
+		@Override
+		public boolean test(Long now) throws Exception {
+			return !_executing;
+		}
+	};
+	private static final Function<Long, Publisher<String>> checkImpl = new Function<Long, Publisher<String>>() {
+		@Override
+		public Publisher<String> apply(Long ignore) throws Exception {
+			return checkImpl();
+		}
+	};
+
+	private static Flowable<String> checkImpl() {
 		return fromIterable(receivedMessages.keySet())
-				.doOnSubscribe(QoS4ReceiveDaemon::startExecuting)
-				.filter(QoS4ReceiveDaemon::allMessagesThatExceedValidTime)
-				.doOnNext(receivedMessages::remove)
-				.doFinally(QoS4ReceiveDaemon::finishExecuting);
+				.doOnSubscribe(startExecuting)
+				.filter(allMessagesThatExceedValidTime)
+				.doOnNext(receivedMessages_remove)
+				.doFinally(finishExecuting);
 	}
 
-	private static void startExecuting(Subscription ignore) {
+	private static final Consumer<Subscription> startExecuting = new Consumer<Subscription>() {
+		@Override
+		public void accept(Subscription ignore) throws Exception {
+			startExecuting();
+		}
+	};
+	private static final Predicate<String> allMessagesThatExceedValidTime = new Predicate<String>() {
+		@Override
+		public boolean test(String key) throws Exception {
+			return allMessagesThatExceedValidTime(key);
+		}
+	};
+	private static final Consumer<String> receivedMessages_remove = new Consumer<String>() {
+		@Override
+		public void accept(String key) throws Exception {
+			receivedMessages.remove(key);
+		}
+	};
+	private static final Action finishExecuting = new Action() {
+		@Override
+		public void run() throws Exception {
+			finishExecuting();
+		}
+	};
+
+	private static void startExecuting() {
 		_executing = true;
 		if (ClientCoreSDK.DEBUG) {
 			Log.d(TAG, "【IMCORE】【QoS接收方】++++++++++ START " +
@@ -89,13 +132,31 @@ public final class QoS4ReceiveDaemon
 		_executing = false;
 	}
 
-	static void startup(boolean immediately)
+	private static final Consumer<Subscription> stop = new Consumer<Subscription>() {
+		@Override
+		public void accept(Subscription s) throws Exception {
+			stop();
+		}
+	};
+	private static final Consumer<String> updateTimestamp = new Consumer<String>() {
+		@Override
+		public void accept(String fingerPrintOfProtocol) throws Exception {
+			updateTimestamp(fingerPrintOfProtocol);
+		}
+	};
+
+	static void startup(final boolean immediately)
 	{
 		Flowable.fromIterable(receivedMessages.keySet())
 				.subscribeOn(computation())
-				.doOnSubscribe(s -> stop())
-				.doOnNext(QoS4ReceiveDaemon::updateTimestamp)
-				.doOnComplete(() -> startCheck(immediately))
+				.doOnSubscribe(stop)
+				.doOnNext(updateTimestamp)
+				.doOnComplete(new Action() {
+					@Override
+					public void run() throws Exception {
+						startCheck(immediately);
+					}
+				})
 				.subscribe();
 	}
 

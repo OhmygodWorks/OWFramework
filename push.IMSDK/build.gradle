@@ -9,8 +9,8 @@ android {
     defaultConfig {
         minSdkVersion 14
         targetSdkVersion 25
-        versionCode 170401
-        versionName '0.1.4'
+        versionCode 170404
+        versionName '0.1.5'
 
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
 
@@ -24,8 +24,8 @@ android {
     productFlavors {
     }
     compileOptions {
-        targetCompatibility 1.8
-        sourceCompatibility 1.8
+        sourceCompatibility JavaVersion.VERSION_1_7
+        targetCompatibility JavaVersion.VERSION_1_7
     }
 }
 

@@ -16,6 +16,9 @@ import android.support.annotation.WorkerThread;
 import android.util.Log;
 
 import io.reactivex.disposables.Disposable;
+import io.reactivex.functions.Consumer;
+import io.reactivex.functions.Function;
+import io.reactivex.functions.Predicate;
 
 import static android.os.SystemClock.elapsedRealtime;
 import static io.reactivex.Observable.interval;
@@ -50,7 +53,7 @@ public final class AutoReLoginDaemon {
     private AutoReLoginDaemon() {}
 
     @WorkerThread
-    private static int bgAutoReLogin(long time) {
+    private static int bgAutoReLogin() {
         _executing = true;
         latestExecuted = elapsedRealtime();
         if (DEBUG)
@@ -89,11 +92,30 @@ public final class AutoReLoginDaemon {
     private static synchronized void start(long initialDelay) {
         stop();
         disposable = interval(initialDelay, AUTO_RE$LOGIN_INTERVAL, MILLISECONDS, io())
-                .filter((time) -> !_executing)
-                .map(AutoReLoginDaemon::bgAutoReLogin)
+                .filter(not_executing)
+                .map(bgAutoReLogin)
                 .observeOn(mainThread())
-                .subscribe(AutoReLoginDaemon::fgAutoReLogin);
+                .subscribe(fgAutoReLogin);
     }
+
+    private static final Predicate<Long> not_executing = new Predicate<Long>() {
+        @Override
+        public boolean test(Long time) throws Exception {
+            return !_executing;
+        }
+    };
+    private static final Function<Long, Integer> bgAutoReLogin = new Function<Long, Integer>() {
+        @Override
+        public Integer apply(Long time) throws Exception {
+            return bgAutoReLogin();
+        }
+    };
+    private static final Consumer<Integer> fgAutoReLogin = new Consumer<Integer>() {
+        @Override
+        public void accept(Integer result) throws Exception {
+            fgAutoReLogin(result);
+        }
+    };
 
     /**
      * 停止并重新开始定期自动登录
