@@ -24,6 +24,7 @@ public final class ConfigEntity
 	}
 
 	/** 默认的服务器的IP或域名 */
+	@SuppressWarnings("SpellCheckingInspection")
 	private static final String DEFAULT_SERVER_IP = "rbcore.openmob.net";
 	/** 默认的服务器的UDP端口号 */
 	private static final int DEFAULT_SERVER_UDP_PORT = 7901;

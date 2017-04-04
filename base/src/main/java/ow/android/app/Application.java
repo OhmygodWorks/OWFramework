@@ -3,6 +3,8 @@ package ow.android.app;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 
+import ow.framework.ApplicationModule;
+
 /**
  * the application class used instead of {@link android.app.Application} for perform some init.
  * Other project should extend this class or else override the {@link #attachBaseContext(Context)}

@@ -46,9 +46,7 @@ import static android.content.Context.CONNECTIVITY_SERVICE;
 import static android.net.ConnectivityManager.CONNECTIVITY_ACTION;
 import static android.net.ConnectivityManager.TYPE_MOBILE;
 import static android.net.ConnectivityManager.TYPE_WIFI;
-import static net.openmob.mobileimsdk.android.conf.ConfigEntity.SenseMode.MODE_10S;
 import static net.openmob.mobileimsdk.android.conf.ConfigEntity.getAppKey;
-import static net.openmob.mobileimsdk.android.conf.ConfigEntity.setSenseMode;
 import static net.openmob.mobileimsdk.android.core.LocalUDPSocketProvider.closeLocalUDPSocket;
 
 public final class ClientCoreSDK
@@ -165,7 +163,6 @@ public final class ClientCoreSDK
 			// Register for broadcasts when network status changed
 			context.registerReceiver(networkConnectStatusReceiver,
 					new IntentFilter(CONNECTIVITY_ACTION));
-			setSenseMode(MODE_10S);
 			_init = true;
 		}
 	}
